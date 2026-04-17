@@ -3,7 +3,6 @@ package com.nbwf.modules.job.service;
 import com.nbwf.common.ai.StructuredOutputInvoker;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.modules.job.model.JobMatchDTO;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,13 +14,18 @@ import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class JobMatchService {
 
     private static final Logger logger = LoggerFactory.getLogger(JobMatchService.class);
 
     private final ChatClient chatClient;
     private final StructuredOutputInvoker structuredOutputInvoker;
+
+    public JobMatchService(ChatClient.Builder chatClientBuilder,
+                           StructuredOutputInvoker structuredOutputInvoker) {
+        this.chatClient = chatClientBuilder.build();
+        this.structuredOutputInvoker = structuredOutputInvoker;
+    }
 
     private record MatchResult(
         int overallScore,
