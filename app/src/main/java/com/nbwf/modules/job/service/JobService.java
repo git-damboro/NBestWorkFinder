@@ -92,14 +92,7 @@ public class JobService {
             throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED);
         }
 
-        var result = matchService.analyze(resume.getResumeText(), job.getTitle(), job.getDescription());
-        return new JobMatchDTO(
-            result.overallScore(),
-            result.matchedSkills(),
-            result.missingSkills(),
-            result.suggestions(),
-            result.summary()
-        );
+        return matchService.analyze(resume.getResumeText(), job.getTitle(), job.getDescription());
     }
 
     private JobEntity findOrThrow(Long id, Long userId) {

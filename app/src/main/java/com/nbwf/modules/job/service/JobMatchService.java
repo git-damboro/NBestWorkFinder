@@ -2,6 +2,7 @@ package com.nbwf.modules.job.service;
 
 import com.nbwf.common.ai.StructuredOutputInvoker;
 import com.nbwf.common.exception.ErrorCode;
+import com.nbwf.modules.job.model.JobMatchDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -52,7 +53,7 @@ public class JobMatchService {
 }
 """;
 
-    public MatchResult analyze(String resumeText, String jobTitle, String jobDescription) {
+    public JobMatchDTO analyze(String resumeText, String jobTitle, String jobDescription) {
         String userPrompt = String.format(
             "目标职位：%s\n\n职位描述：\n%s\n\n候选人简历：\n%s",
             jobTitle, jobDescription, resumeText
@@ -60,7 +61,7 @@ public class JobMatchService {
 
         BeanOutputConverter<MatchResult> converter = new BeanOutputConverter<>(MatchResult.class);
 
-        return structuredOutputInvoker.invoke(
+        MatchResult result = structuredOutputInvoker.invoke(
             chatClient,
             SYSTEM_PROMPT,
             userPrompt,
@@ -69,6 +70,14 @@ public class JobMatchService {
             "简历匹配分析失败：",
             "JobMatch",
             logger
+        );
+
+        return new JobMatchDTO(
+            result.overallScore(),
+            result.matchedSkills(),
+            result.missingSkills(),
+            result.suggestions(),
+            result.summary()
         );
     }
 }
