@@ -119,7 +119,7 @@ app:
     endpoint: ${APP_STORAGE_ENDPOINT:http://localhost:9000}
     access-key: ${APP_STORAGE_ACCESS_KEY:wr45VXJZhCxc6FAWz0YR}
     secret-key: ${APP_STORAGE_SECRET_KEY:GtKxV57WJkpw4CvASPBzTy2DYElLnRqh8dIXQa0m}
-    bucket: ${APP_STORAGE_BUCKET:interview-guide}
+    bucket: ${APP_STORAGE_BUCKET:nbwf}
     region: ${APP_STORAGE_REGION:us-east-1}
   
   # CORS配置 - React前端

@@ -108,10 +108,10 @@ services:
       /bin/sh -c "
       # 1. 配置 MinIO 客户端别名 (myminio) 连接到 minio 服务
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      # 2. 创建名为 interview-guide 的存储桶
-      /usr/bin/mc mb myminio/interview-guide;
+      # 2. 创建名为 nbwf 的存储桶
+      /usr/bin/mc mb myminio/nbwf;
       # 3. 设置该存储桶为公共读权限（方便前端直接访问图片等资源）
-      /usr/bin/mc anonymous set public myminio/interview-guide;
+      /usr/bin/mc anonymous set public myminio/nbwf;
       exit 0;
       "
 
@@ -155,7 +155,7 @@ services:
       APP_STORAGE_ENDPOINT: http://minio:9000
       APP_STORAGE_ACCESS_KEY: minioadmin
       APP_STORAGE_SECRET_KEY: minioadmin
-      APP_STORAGE_BUCKET: interview-guide
+      APP_STORAGE_BUCKET: nbwf
       APP_STORAGE_REGION: us-east-1
       
       # === AI 模型配置 (必须配置) ===
