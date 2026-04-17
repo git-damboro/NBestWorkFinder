@@ -68,8 +68,12 @@ public enum ErrorCode {
     USER_NOT_FOUND(9002, "用户不存在"),
     USER_PASSWORD_INCORRECT(9003, "邮箱或密码错误"),
     USER_TOKEN_INVALID(9004, "Token无效或已过期"),
-    USER_REFRESH_TOKEN_INVALID(9005, "Refresh Token无效或已过期");
-    
+    USER_REFRESH_TOKEN_INVALID(9005, "Refresh Token无效或已过期"),
+
+    // ========== 职位模块错误 10xxx ==========
+    JOB_NOT_FOUND(10001, "职位不存在"),
+    JOB_CREATE_FAILED(10002, "职位创建失败");
+
     private final Integer code;
     private final String message;
 }
