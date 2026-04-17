@@ -4,6 +4,8 @@ import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.modules.job.model.*;
 import com.nbwf.modules.job.repository.JobRepository;
+import com.nbwf.modules.resume.model.ResumeEntity;
+import com.nbwf.modules.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,17 +21,20 @@ public class JobService {
 
     private final JobRepository jobRepository;
     private final JobTagExtractService tagExtractService;
+    private final JobMatchService matchService;
+    private final ResumeRepository resumeRepository;
 
     @Transactional
-    public JobDetailDTO create(CreateJobRequest req, Long adminId) {
+    public JobDetailDTO create(CreateJobRequest req, Long userId) {
         JobEntity job = new JobEntity();
+        job.setUserId(userId);
         job.setTitle(req.getTitle());
         job.setCompany(req.getCompany());
         job.setDescription(req.getDescription());
         job.setLocation(req.getLocation());
         job.setSalaryMin(req.getSalaryMin());
         job.setSalaryMax(req.getSalaryMax());
-        job.setCreatedBy(adminId);
+        job.setNotes(req.getNotes());
 
         List<String> tags = extractTagsSafely(req.getTitle(), req.getDescription());
         job.setTechTags(joinTags(tags));
@@ -37,23 +42,20 @@ public class JobService {
         return toDetailDTO(jobRepository.save(job));
     }
 
-    public List<JobListItemDTO> listActive() {
-        return jobRepository.findByStatusOrderByCreatedAtDesc(JobStatus.ACTIVE)
-            .stream().map(this::toListItemDTO).toList();
+    public List<JobListItemDTO> list(Long userId, JobApplicationStatus status) {
+        List<JobEntity> jobs = status != null
+            ? jobRepository.findByUserIdAndApplicationStatusOrderByCreatedAtDesc(userId, status)
+            : jobRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return jobs.stream().map(this::toListItemDTO).toList();
     }
 
-    public List<JobListItemDTO> listAll() {
-        return jobRepository.findAllByOrderByCreatedAtDesc()
-            .stream().map(this::toListItemDTO).toList();
-    }
-
-    public JobDetailDTO getDetail(Long id) {
-        return toDetailDTO(findOrThrow(id));
+    public JobDetailDTO getDetail(Long id, Long userId) {
+        return toDetailDTO(findOrThrow(id, userId));
     }
 
     @Transactional
-    public JobDetailDTO update(Long id, UpdateJobRequest req) {
-        JobEntity job = findOrThrow(id);
+    public JobDetailDTO update(Long id, UpdateJobRequest req, Long userId) {
+        JobEntity job = findOrThrow(id, userId);
 
         boolean descriptionChanged = req.getDescription() != null
             && !req.getDescription().equals(job.getDescription());
@@ -64,7 +66,8 @@ public class JobService {
         if (req.getLocation() != null) job.setLocation(req.getLocation());
         if (req.getSalaryMin() != null) job.setSalaryMin(req.getSalaryMin());
         if (req.getSalaryMax() != null) job.setSalaryMax(req.getSalaryMax());
-        if (req.getStatus() != null) job.setStatus(req.getStatus());
+        if (req.getApplicationStatus() != null) job.setApplicationStatus(req.getApplicationStatus());
+        if (req.getNotes() != null) job.setNotes(req.getNotes());
 
         if (descriptionChanged) {
             List<String> tags = extractTagsSafely(job.getTitle(), job.getDescription());
@@ -75,13 +78,32 @@ public class JobService {
     }
 
     @Transactional
-    public void delete(Long id) {
-        JobEntity job = findOrThrow(id);
+    public void delete(Long id, Long userId) {
+        JobEntity job = findOrThrow(id, userId);
         jobRepository.delete(job);
     }
 
-    private JobEntity findOrThrow(Long id) {
-        return jobRepository.findById(id)
+    public JobMatchDTO match(Long jobId, Long resumeId, Long userId) {
+        JobEntity job = findOrThrow(jobId, userId);
+        ResumeEntity resume = resumeRepository.findById(resumeId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND));
+
+        if (resume.getResumeText() == null || resume.getResumeText().isBlank()) {
+            throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED);
+        }
+
+        var result = matchService.analyze(resume.getResumeText(), job.getTitle(), job.getDescription());
+        return new JobMatchDTO(
+            result.overallScore(),
+            result.matchedSkills(),
+            result.missingSkills(),
+            result.suggestions(),
+            result.summary()
+        );
+    }
+
+    private JobEntity findOrThrow(Long id, Long userId) {
+        return jobRepository.findByIdAndUserId(id, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.JOB_NOT_FOUND));
     }
 
@@ -115,7 +137,7 @@ public class JobService {
             job.getSalaryMin(),
             job.getSalaryMax(),
             splitTags(job.getTechTags()),
-            job.getStatus(),
+            job.getApplicationStatus(),
             job.getCreatedAt()
         );
     }
@@ -130,7 +152,8 @@ public class JobService {
             job.getSalaryMin(),
             job.getSalaryMax(),
             splitTags(job.getTechTags()),
-            job.getStatus(),
+            job.getApplicationStatus(),
+            job.getNotes(),
             job.getCreatedAt(),
             job.getUpdatedAt()
         );

@@ -26,5 +26,8 @@ public class UpdateJobRequest {
     @Positive(message = "最高薪资必须为正数")
     private Integer salaryMax;
 
-    private JobStatus status;
+    private JobApplicationStatus applicationStatus;
+
+    @Size(max = 2000, message = "备注不超过2000字")
+    private String notes;
 }

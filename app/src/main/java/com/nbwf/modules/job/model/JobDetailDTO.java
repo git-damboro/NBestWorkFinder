@@ -12,7 +12,8 @@ public record JobDetailDTO(
     Integer salaryMin,
     Integer salaryMax,
     List<String> techTags,
-    JobStatus status,
+    JobApplicationStatus applicationStatus,
+    String notes,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {}

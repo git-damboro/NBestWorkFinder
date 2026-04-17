@@ -5,8 +5,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "jobs", indexes = {
-    @Index(name = "idx_job_status", columnList = "status"),
-    @Index(name = "idx_job_created_by", columnList = "created_by")
+    @Index(name = "idx_job_user_id", columnList = "user_id"),
+    @Index(name = "idx_job_application_status", columnList = "application_status")
 })
 public class JobEntity {
 
@@ -14,12 +14,16 @@ public class JobEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
     @Column(nullable = false, length = 200)
     private String title;
 
     @Column(nullable = false, length = 200)
     private String company;
 
+    // 用户粘贴的原始 JD 文本
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
@@ -30,16 +34,18 @@ public class JobEntity {
 
     private Integer salaryMax;
 
-    // 技术标签，逗号分隔存储，如 "Java,Spring Boot,MySQL"
+    // AI 提取的技术标签，逗号分隔
     @Column(columnDefinition = "TEXT")
     private String techTags;
 
+    // 求职进展状态
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private JobStatus status = JobStatus.ACTIVE;
+    @Column(name = "application_status", nullable = false, length = 20)
+    private JobApplicationStatus applicationStatus = JobApplicationStatus.SAVED;
 
-    @Column(name = "created_by")
-    private Long createdBy;
+    // 用户备注
+    @Column(columnDefinition = "TEXT")
+    private String notes;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -59,6 +65,9 @@ public class JobEntity {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -81,11 +90,11 @@ public class JobEntity {
     public String getTechTags() { return techTags; }
     public void setTechTags(String techTags) { this.techTags = techTags; }
 
-    public JobStatus getStatus() { return status; }
-    public void setStatus(JobStatus status) { this.status = status; }
+    public JobApplicationStatus getApplicationStatus() { return applicationStatus; }
+    public void setApplicationStatus(JobApplicationStatus applicationStatus) { this.applicationStatus = applicationStatus; }
 
-    public Long getCreatedBy() { return createdBy; }
-    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

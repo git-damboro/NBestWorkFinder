@@ -29,4 +29,7 @@ public class CreateJobRequest {
 
     @Positive(message = "最高薪资必须为正数")
     private Integer salaryMax;
+
+    @Size(max = 2000, message = "备注不超过2000字")
+    private String notes;
 }
