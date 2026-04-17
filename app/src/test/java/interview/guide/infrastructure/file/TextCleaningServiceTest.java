@@ -1,4 +1,4 @@
-package interview.guide.infrastructure.file;
+package com.nbwf.infrastructure.file;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

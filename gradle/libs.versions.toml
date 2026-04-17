@@ -3,6 +3,7 @@
 [versions]
 spring-boot = "4.0.1"
 spring-ai = "2.0.0-M1"
+jjwt = "0.12.6"
 tika = "2.9.2"
 lombok = "1.18.36"
 junit-jupiter = "5.12.0"
@@ -20,6 +21,9 @@ tika-core = { module = "org.apache.tika:tika-core", version.ref = "tika" }
 tika-parsers = { module = "org.apache.tika:tika-parsers-standard-package", version.ref = "tika" }
 pinyin4j = { module = "com.belerweb:pinyin4j", version.ref = "pinyin4j" }
 springdoc = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
+jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
+jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

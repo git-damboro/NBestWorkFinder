@@ -1,4 +1,4 @@
-package interview.guide;
+package com.nbwf;
 
 import org.junit.jupiter.api.Test;
 

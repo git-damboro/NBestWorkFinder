@@ -1,4 +1,4 @@
-package interview.guide.common.aspect;
+package com.nbwf.common.aspect;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

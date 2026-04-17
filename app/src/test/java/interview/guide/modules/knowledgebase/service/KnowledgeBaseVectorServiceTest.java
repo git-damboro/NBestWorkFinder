@@ -1,6 +1,6 @@
-package interview.guide.modules.knowledgebase.service;
+package com.nbwf.modules.knowledgebase.service;
 
-import interview.guide.modules.knowledgebase.repository.VectorRepository;
+import com.nbwf.modules.knowledgebase.repository.VectorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

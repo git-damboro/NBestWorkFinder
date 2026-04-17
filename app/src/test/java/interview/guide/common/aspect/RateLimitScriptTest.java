@@ -1,6 +1,6 @@
-package interview.guide.common.aspect;
+package com.nbwf.common.aspect;
 
-import interview.guide.common.annotation.RateLimit;
+import com.nbwf.common.annotation.RateLimit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
