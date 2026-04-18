@@ -7,9 +7,9 @@
 | 项目 | 内容 |
 |---|---|
 | 项目名称 | `NBestWorkFinder` |
-| 当前阶段 | 用户模块登录注册闭环设计已确认，实施计划已编写，准备进入实现阶段 |
-| 当前目标 | 完成请求层 Token 注入与路由守卫 |
-| 下一阶段 | 在认证闭环稳定后，推进 `resume / interview / knowledgebase` 用户隔离 |
+| 当前阶段 | 用户模块登录注册闭环已完成，准备进入用户数据隔离阶段 |
+| 当前目标 | 推进 `resume / interview / knowledgebase` 用户隔离 |
+| 下一阶段 | 先完成 `resume` 模块用户数据隔离，再逐步推进 `interview` 与 `knowledgebase` |
 
 ## 2. 模块进度总览
 
@@ -30,7 +30,7 @@
 | 迭代名称 | 用户模块 - 登录注册闭环（A 档） |
 | 范围 | 登录、注册、退出、路由守卫、Token 注入、登录态展示 |
 | 设计状态 | 已确认 |
-| 实现状态 | 待执行 |
+| 实现状态 | 已完成 |
 | 设计文档 | `docs/superpowers/specs/2026-04-18-user-auth-minimal-design.md` |
 | 实施计划 | `docs/superpowers/plans/2026-04-18-user-auth-minimal-implementation-plan.md` |
 
@@ -88,6 +88,13 @@
 | Commit | 类型 | 说明 |
 |---|---|---|
 | `29f8d00` | fix | 修复简历上传 CORS 预检并补测试 |
+| `2679e43` | feat | 新增前端认证类型与会话本地存储工具 |
+| `ec94473` | fix | 补齐 localStorage 访问异常防护 |
+| `5295ea2` | feat | 新增认证 API 封装与 `AuthContext` |
+| `4b892e0` | feat | 增加请求层 Token 注入、401 失效处理与路由守卫 |
+| `3bf0646` | feat | 新增登录页与注册页 |
+| `123d4fa` | feat | 接入 `AuthProvider` 并重构公开/受保护路由 |
+| `fe6a0e1` | feat | 完成布局登录态展示与业务接口登录保护 |
 | `04e45d5` | docs | 增加项目交接文档 `PROJECT_HANDOFF.md` |
 | `39d9cb2` | fix | 修复 Job 模块 `ChatClient.Builder` 注入方式 |
 | `4d3fe86` | fix | 修复 Job 模块返回私有 record 导致不可访问问题 |
@@ -97,9 +104,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 目标 | 完成请求层 Token 注入与路由守卫 |
-| 具体任务 | 修改 `request.ts` 注入 Bearer Token，并补 `ProtectedRoute` / `PublicRoute` |
-| 完成标准 | 未登录不能进入业务页，业务请求自动携带登录 Token |
+| 目标 | 开始 `resume` 模块用户数据隔离 |
+| 具体任务 | 上传、列表、详情、删除、导出、重分析接口全部接入当前登录用户 |
+| 完成标准 | 每个用户只能查看和操作自己的简历数据 |
 
 ## 10. 文档维护规则
 
