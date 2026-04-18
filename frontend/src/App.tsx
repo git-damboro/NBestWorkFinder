@@ -5,6 +5,7 @@ import { historyApi } from './api/history';
 import type { UploadKnowledgeBaseResponse } from './api/knowledgebase';
 import ProtectedRoute from './auth/ProtectedRoute';
 import PublicRoute from './auth/PublicRoute';
+import type { InterviewJobTarget } from './types/interview';
 
 // Lazy load components
 const UploadPage = lazy(() => import('./pages/UploadPage'));
@@ -82,10 +83,12 @@ function InterviewWrapper() {
   const location = useLocation();
   const [resumeText, setResumeText] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const routeState = location.state as { resumeText?: string; jobTarget?: InterviewJobTarget } | null;
+  const jobTarget = routeState?.jobTarget ?? null;
 
   useEffect(() => {
     // 优先从location state获取resumeText
-    const stateText = (location.state as { resumeText?: string })?.resumeText;
+    const stateText = routeState?.resumeText;
     if (stateText) {
       setResumeText(stateText);
       setLoading(false);
@@ -134,6 +137,7 @@ function InterviewWrapper() {
     <Interview
       resumeText={resumeText}
       resumeId={parseInt(resumeId, 10)}
+      jobTarget={jobTarget}
       onBack={handleBack}
       onInterviewComplete={handleInterviewComplete}
     />

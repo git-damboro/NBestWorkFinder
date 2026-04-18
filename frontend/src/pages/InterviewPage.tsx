@@ -4,7 +4,7 @@ import {interviewApi} from '../api/interview';
 import ConfirmDialog from '../components/ConfirmDialog';
 import InterviewConfigPanel from '../components/InterviewConfigPanel';
 import InterviewChatPanel from '../components/InterviewChatPanel';
-import type {InterviewQuestion, InterviewSession} from '../types/interview';
+import type {InterviewJobTarget, InterviewQuestion, InterviewSession} from '../types/interview';
 
 type InterviewStage = 'config' | 'interview';
 
@@ -18,11 +18,18 @@ interface Message {
 interface InterviewProps {
   resumeText: string;
   resumeId?: number;
+  jobTarget?: InterviewJobTarget | null;
   onBack: () => void;
   onInterviewComplete: () => void;
 }
 
-export default function Interview({ resumeText, resumeId, onBack, onInterviewComplete }: InterviewProps) {
+export default function Interview({
+  resumeText,
+  resumeId,
+  jobTarget,
+  onBack,
+  onInterviewComplete,
+}: InterviewProps) {
   const [stage, setStage] = useState<InterviewStage>('config');
   const [questionCount, setQuestionCount] = useState(8);
   const [session, setSession] = useState<InterviewSession | null>(null);
@@ -119,6 +126,7 @@ export default function Interview({ resumeText, resumeId, onBack, onInterviewCom
         resumeText,
         questionCount,
         resumeId,
+        jobId: jobTarget?.jobId,
         forceCreate: forceCreateNew
       });
 
@@ -229,6 +237,7 @@ export default function Interview({ resumeText, resumeId, onBack, onInterviewCom
         onContinueUnfinished={handleContinueUnfinished}
         onStartNew={handleStartNew}
         resumeText={resumeText}
+        jobTarget={jobTarget}
         onBack={onBack}
         error={error}
       />
@@ -256,7 +265,7 @@ export default function Interview({ resumeText, resumeId, onBack, onInterviewCom
   };
 
   const stageSubtitles = {
-    config: '配置您的面试参数',
+    config: jobTarget ? '围绕目标职位配置本次定向面试' : '配置您的面试参数',
     interview: '认真回答每个问题，展示您的实力'
   };
 

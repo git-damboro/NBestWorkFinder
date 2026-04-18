@@ -8,6 +8,8 @@ import com.nbwf.infrastructure.redis.InterviewSessionCache.CachedSession;
 import com.nbwf.modules.interview.listener.EvaluateStreamProducer;
 import com.nbwf.modules.interview.model.*;
 import com.nbwf.modules.interview.model.InterviewSessionDTO.SessionStatus;
+import com.nbwf.modules.job.model.JobDetailDTO;
+import com.nbwf.modules.job.service.JobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ public class InterviewSessionService {
     private final InterviewSessionCache sessionCache;
     private final ObjectMapper objectMapper;
     private final EvaluateStreamProducer evaluateStreamProducer;
+    private final JobService jobService;
 
     /**
      * 创建新的面试会话
@@ -63,11 +66,15 @@ public class InterviewSessionService {
             historicalQuestions = persistenceService.getHistoricalQuestionsByResumeId(request.resumeId(), userId);
         }
 
+        // 如果用户从职位工作台发起面试，则把职位 JD / 标签注入到出题上下文中。
+        String targetJobContext = buildTargetJobContext(request.jobId(), userId);
+
         // 生成面试问题
         List<InterviewQuestionDTO> questions = questionService.generateQuestions(
             request.resumeText(),
             request.questionCount(),
-            historicalQuestions
+            historicalQuestions,
+            targetJobContext
         );
 
         // 保存到 Redis 缓存
@@ -99,6 +106,39 @@ public class InterviewSessionService {
             questions,
             SessionStatus.CREATED
         );
+    }
+
+    private String buildTargetJobContext(Long jobId, Long userId) {
+        if (jobId == null) {
+            return null;
+        }
+
+        JobDetailDTO job = jobService.getDetail(jobId, userId);
+        String tags = job.techTags() == null || job.techTags().isEmpty()
+            ? "暂无标签"
+            : String.join("、", job.techTags());
+        String notes = job.notes() == null || job.notes().isBlank()
+            ? "暂无备注"
+            : job.notes();
+
+        return String.format(
+            """
+            目标职位信息：
+            - 职位名称：%s
+            - 公司：%s
+            - 工作地点：%s
+            - 技术标签：%s
+            - 职位描述：
+            %s
+            - 用户备注：%s
+            """,
+            job.title(),
+            job.company(),
+            job.location() == null || job.location().isBlank() ? "未填写" : job.location(),
+            tags,
+            job.description(),
+            notes
+        ).trim();
     }
 
     /**

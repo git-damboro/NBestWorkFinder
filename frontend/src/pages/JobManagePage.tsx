@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
@@ -16,10 +17,13 @@ import {
   Trash2,
 } from 'lucide-react';
 import { jobApi } from '../api';
+import { historyApi, type ResumeListItem } from '../api/history';
 import { getErrorMessage } from '../api/request';
+import ConfirmDialog from '../components/ConfirmDialog';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 import JobFormDialog, { type JobFormData, type JobFormMode } from '../components/JobFormDialog';
 import JobMatchDialog from '../components/JobMatchDialog';
+import type { InterviewJobTarget } from '../types/interview';
 import type { CreateJobForm, JobApplicationStatus, JobDetail, JobListItem, UpdateJobForm } from '../types/job';
 import { jobStatusLabelMap, jobStatusOptions } from '../types/job';
 import { formatDateOnly, formatDateTime } from '../utils/date';
@@ -108,6 +112,16 @@ function toUpdatePayload(data: JobFormData): UpdateJobForm {
   };
 }
 
+function buildInterviewJobTarget(job: JobDetail): InterviewJobTarget {
+  return {
+    jobId: job.id,
+    title: job.title,
+    company: job.company,
+    description: job.description,
+    techTags: job.techTags,
+  };
+}
+
 function matchKeyword(job: JobListItem, keyword: string) {
   const normalizedKeyword = keyword.trim().toLowerCase();
   if (!normalizedKeyword) {
@@ -121,6 +135,7 @@ function matchKeyword(job: JobListItem, keyword: string) {
 }
 
 export default function JobManagePage() {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [selectedJob, setSelectedJob] = useState<JobDetail | null>(null);
@@ -137,6 +152,11 @@ export default function JobManagePage() {
   const [matchOpen, setMatchOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<JobDetail | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [interviewOpen, setInterviewOpen] = useState(false);
+  const [interviewResumes, setInterviewResumes] = useState<ResumeListItem[]>([]);
+  const [loadingInterviewResumes, setLoadingInterviewResumes] = useState(false);
+  const [selectedInterviewResumeId, setSelectedInterviewResumeId] = useState<number | null>(null);
+  const [interviewError, setInterviewError] = useState<string | null>(null);
 
   // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
   const selectedJobIdRef = useRef<number | null>(null);
@@ -217,6 +237,48 @@ export default function JobManagePage() {
     void loadJobDetail(selectedJobId);
   }, [selectedJobId, loadJobDetail]);
 
+  useEffect(() => {
+    if (!interviewOpen) {
+      return;
+    }
+
+    let cancelled = false;
+
+    // 发起定向面试前先拉取当前用户简历列表，由用户选择本次面试使用的简历。
+    const loadResumeOptions = async () => {
+      setLoadingInterviewResumes(true);
+      setInterviewError(null);
+
+      try {
+        const data = await historyApi.getResumes();
+        if (cancelled) {
+          return;
+        }
+
+        setInterviewResumes(data);
+        setSelectedInterviewResumeId(data[0]?.id ?? null);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setInterviewResumes([]);
+        setSelectedInterviewResumeId(null);
+        setInterviewError(getErrorMessage(error));
+      } finally {
+        if (!cancelled) {
+          setLoadingInterviewResumes(false);
+        }
+      }
+    };
+
+    void loadResumeOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interviewOpen]);
+
   const filteredJobs = useMemo(
     () => jobs.filter((job) => matchKeyword(job, searchKeyword)),
     [jobs, searchKeyword],
@@ -257,6 +319,15 @@ export default function JobManagePage() {
     setActionError(null);
     setFormMode('edit');
     setFormOpen(true);
+  };
+
+  const openDirectedInterviewDialog = () => {
+    if (!selectedJob) {
+      return;
+    }
+
+    setInterviewError(null);
+    setInterviewOpen(true);
   };
 
   const handleRefresh = () => {
@@ -310,6 +381,24 @@ export default function JobManagePage() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handleStartDirectedInterview = () => {
+    if (!selectedJob) {
+      return;
+    }
+
+    if (selectedInterviewResumeId === null) {
+      setInterviewError('请先选择一份简历再开始面试。');
+      return;
+    }
+
+    setInterviewOpen(false);
+    navigate(`/interview/${selectedInterviewResumeId}`, {
+      state: {
+        jobTarget: buildInterviewJobTarget(selectedJob),
+      },
+    });
   };
 
   return (
@@ -602,6 +691,14 @@ export default function JobManagePage() {
                   </button>
                   <button
                     type="button"
+                    onClick={openDirectedInterviewDialog}
+                    className="flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-600"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    定向面试
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setDeleteTarget(selectedJob)}
                     className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-300"
                   >
@@ -694,6 +791,82 @@ export default function JobManagePage() {
             : null
         }
         onClose={() => setMatchOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={interviewOpen}
+        title="开始定向模拟面试"
+        message={
+          selectedJob
+            ? `目标职位：${selectedJob.title} · ${selectedJob.company}`
+            : '请选择职位后再开始面试'
+        }
+        confirmText="开始面试"
+        cancelText="取消"
+        loading={loadingInterviewResumes}
+        onConfirm={handleStartDirectedInterview}
+        onCancel={() => setInterviewOpen(false)}
+        customContent={
+          <div className="space-y-4">
+            <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+              选择一份简历后，系统会结合该职位 JD、技术标签与简历内容生成更有针对性的面试题。
+            </p>
+
+            {loadingInterviewResumes && (
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-700/40 dark:text-slate-300">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                正在加载简历列表...
+              </div>
+            )}
+
+            {!loadingInterviewResumes && interviewResumes.length === 0 && (
+              <div className="rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600/70 dark:bg-amber-900/20 dark:text-amber-200">
+                暂无可用简历，请先上传并解析简历后再发起定向面试。
+              </div>
+            )}
+
+            {!loadingInterviewResumes && interviewResumes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">选择简历</p>
+                <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                  {interviewResumes.map((resume) => {
+                    const selected = selectedInterviewResumeId === resume.id;
+
+                    return (
+                      <button
+                        key={resume.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedInterviewResumeId(resume.id);
+                          setInterviewError(null);
+                        }}
+                        className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${
+                          selected
+                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
+                            : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/60'
+                        }`}
+                      >
+                        <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                          {resume.filename}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          简历 ID：{resume.id}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {interviewError && (
+              <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-500/70 dark:bg-red-900/30 dark:text-red-200">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{interviewError}</span>
+              </div>
+            )}
+          </div>
+        }
       />
 
       <DeleteConfirmDialog

@@ -18,6 +18,8 @@ public record CreateInterviewRequest(
     
     @NotNull(message = "简历ID不能为空")
     Long resumeId,          // 简历ID（用于持久化关联）
-    
+
+    Long jobId,            // 可选：目标职位ID，用于生成更定向的面试题
+
     Boolean forceCreate     // 是否强制创建新会话（忽略未完成的会话），默认为 false
 ) {}

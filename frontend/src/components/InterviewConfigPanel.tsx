@@ -1,5 +1,5 @@
 import {AnimatePresence, motion} from 'framer-motion';
-import type {InterviewSession} from '../types/interview';
+import type {InterviewJobTarget, InterviewSession} from '../types/interview';
 
 interface InterviewConfigPanelProps {
   questionCount: number;
@@ -11,6 +11,7 @@ interface InterviewConfigPanelProps {
   onContinueUnfinished: () => void;
   onStartNew: () => void;
   resumeText: string;
+  jobTarget?: InterviewJobTarget | null;
   onBack: () => void;
   error?: string;
 }
@@ -28,6 +29,7 @@ export default function InterviewConfigPanel({
   onContinueUnfinished,
   onStartNew,
   resumeText,
+  jobTarget,
   onBack,
   error
 }: InterviewConfigPanelProps) {
@@ -119,6 +121,33 @@ export default function InterviewConfigPanel({
         </AnimatePresence>
 
         <div className="space-y-6">
+          {jobTarget && (
+            <div className="rounded-xl border border-primary-200 bg-primary-50/70 p-4 dark:border-primary-800 dark:bg-primary-900/20">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-primary-700 dark:text-primary-300">
+                <span>🎯</span>
+                <span>本次为定向模拟面试</span>
+              </div>
+              <p className="text-sm text-slate-700 dark:text-slate-200">
+                目标职位：{jobTarget.title} · {jobTarget.company}
+              </p>
+              <p className="mt-2 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                题目会优先围绕该职位 JD、技术标签和简历交集生成。
+              </p>
+              {jobTarget.techTags.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {jobTarget.techTags.map((tag) => (
+                    <span
+                      key={`${jobTarget.jobId}-${tag}`}
+                      className="rounded-full bg-white px-2.5 py-1 text-xs text-primary-600 dark:bg-slate-800 dark:text-primary-300"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
               题目数量
