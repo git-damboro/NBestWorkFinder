@@ -33,10 +33,33 @@ public interface RagChatSessionRepository extends JpaRepository<RagChatSessionEn
     List<RagChatSessionEntity> findAllOrderByPinnedAndUpdatedAtDesc();
 
     /**
+     * 获取当前用户所有会话（按置顶状态和更新时间排序）
+     */
+    @Query("SELECT s FROM RagChatSessionEntity s WHERE s.userId = :userId ORDER BY s.isPinned DESC, s.updatedAt DESC")
+    List<RagChatSessionEntity> findAllByUserIdOrderByPinnedAndUpdatedAtDesc(@Param("userId") Long userId);
+
+    /**
      * 根据知识库ID查找相关会话
      */
     @Query("SELECT DISTINCT s FROM RagChatSessionEntity s JOIN s.knowledgeBases kb WHERE kb.id IN :kbIds ORDER BY s.updatedAt DESC")
     List<RagChatSessionEntity> findByKnowledgeBaseIds(@Param("kbIds") List<Long> knowledgeBaseIds);
+
+    /**
+     * 在当前用户范围内根据知识库ID查找相关会话
+     */
+    @Query("SELECT DISTINCT s FROM RagChatSessionEntity s JOIN s.knowledgeBases kb WHERE s.userId = :userId AND kb.id IN :kbIds ORDER BY s.updatedAt DESC")
+    List<RagChatSessionEntity> findByKnowledgeBaseIdsAndUserId(@Param("kbIds") List<Long> knowledgeBaseIds,
+                                                               @Param("userId") Long userId);
+
+    /**
+     * 在当前用户范围内根据ID查询会话
+     */
+    Optional<RagChatSessionEntity> findByIdAndUserId(Long id, Long userId);
+
+    /**
+     * 在当前用户范围内判断会话是否存在
+     */
+    boolean existsByIdAndUserId(Long id, Long userId);
 
     /**
      * 获取会话详情（带消息列表和知识库）
@@ -50,4 +73,11 @@ public interface RagChatSessionRepository extends JpaRepository<RagChatSessionEn
      */
     @Query("SELECT s FROM RagChatSessionEntity s LEFT JOIN FETCH s.knowledgeBases WHERE s.id = :id")
     Optional<RagChatSessionEntity> findByIdWithKnowledgeBases(@Param("id") Long id);
+
+    /**
+     * 在当前用户范围内获取会话（带知识库）
+     */
+    @Query("SELECT s FROM RagChatSessionEntity s LEFT JOIN FETCH s.knowledgeBases WHERE s.id = :id AND s.userId = :userId")
+    Optional<RagChatSessionEntity> findByIdWithKnowledgeBasesAndUserId(@Param("id") Long id,
+                                                                       @Param("userId") Long userId);
 }

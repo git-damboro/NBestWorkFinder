@@ -43,9 +43,10 @@ public class KnowledgeBaseUploadService {
      * @param file 知识库文件
      * @param name 知识库名称（可选，如果为空则从文件名提取）
      * @param category 分类（可选）
+     * @param userId 当前登录用户ID
      * @return 上传结果和存储信息（包含duplicate字段，表示是否为重复上传）
      */
-    public Map<String, Object> uploadKnowledgeBase(MultipartFile file, String name, String category) {
+    public Map<String, Object> uploadKnowledgeBase(MultipartFile file, String name, String category, Long userId) {
         // 1. 验证文件
         fileValidationService.validateFile(file, MAX_FILE_SIZE, "知识库");
 
@@ -58,9 +59,9 @@ public class KnowledgeBaseUploadService {
 
         // 3. 检查知识库是否已存在（去重）
         String fileHash = fileHashService.calculateHash(file);
-        Optional<KnowledgeBaseEntity> existingKb = knowledgeBaseRepository.findByFileHash(fileHash);
+        Optional<KnowledgeBaseEntity> existingKb = knowledgeBaseRepository.findByFileHashAndUserId(fileHash, userId);
         if (existingKb.isPresent()) {
-            log.info("检测到重复知识库: hash={}", fileHash);
+            log.info("检测到当前用户重复知识库: userId={}, hash={}", userId, fileHash);
             return persistenceService.handleDuplicateKnowledgeBase(existingKb.get(), fileHash);
         }
 
@@ -76,10 +77,18 @@ public class KnowledgeBaseUploadService {
         log.info("知识库已存储到RustFS: {}", fileKey);
 
         // 6. 保存知识库元数据到数据库（状态为 PENDING）
-        KnowledgeBaseEntity savedKb = persistenceService.saveKnowledgeBase(file, name, category, fileKey, fileUrl, fileHash);
+        KnowledgeBaseEntity savedKb = persistenceService.saveKnowledgeBase(
+            file,
+            name,
+            category,
+            fileKey,
+            fileUrl,
+            fileHash,
+            userId
+        );
 
         // 7. 发送向量化任务到 Redis Stream（异步处理）
-        vectorizeStreamProducer.sendVectorizeTask(savedKb.getId(), content);
+        vectorizeStreamProducer.sendVectorizeTask(savedKb.getId(), userId, content);
 
         log.info("知识库上传完成，向量化任务已入队: {}, kbId={}", fileName, savedKb.getId());
 
@@ -120,8 +129,8 @@ public class KnowledgeBaseUploadService {
      *
      * @param kbId 知识库ID
      */
-    public void revectorize(Long kbId) {
-        KnowledgeBaseEntity kb = knowledgeBaseRepository.findById(kbId)
+    public void revectorize(Long kbId, Long userId) {
+        KnowledgeBaseEntity kb = knowledgeBaseRepository.findByIdAndUserId(kbId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "知识库不存在"));
 
         log.info("开始重新向量化知识库: kbId={}, name={}", kbId, kb.getName());
@@ -133,12 +142,11 @@ public class KnowledgeBaseUploadService {
         }
 
         // 2. 更新状态为 PENDING（通过单独的 Service 保证事务生效）
-        persistenceService.updateVectorStatusToPending(kbId);
+        persistenceService.updateVectorStatusToPending(kbId, userId);
 
         // 3. 发送向量化任务到 Stream
-        vectorizeStreamProducer.sendVectorizeTask(kbId, content);
+        vectorizeStreamProducer.sendVectorizeTask(kbId, userId, content);
 
         log.info("重新向量化任务已发送: kbId={}", kbId);
     }
 }
-

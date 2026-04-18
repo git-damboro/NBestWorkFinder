@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
@@ -29,16 +30,17 @@ public class RagChatController {
      * 创建新会话
      */
     @PostMapping("/api/rag-chat/sessions")
-    public Result<SessionDTO> createSession(@Valid @RequestBody CreateSessionRequest request) {
-        return Result.success(sessionService.createSession(request));
+    public Result<SessionDTO> createSession(@Valid @RequestBody CreateSessionRequest request,
+                                            @AuthenticationPrincipal Long userId) {
+        return Result.success(sessionService.createSession(request, userId));
     }
 
     /**
      * 获取会话列表
      */
     @GetMapping("/api/rag-chat/sessions")
-    public Result<List<SessionListItemDTO>> listSessions() {
-        return Result.success(sessionService.listSessions());
+    public Result<List<SessionListItemDTO>> listSessions(@AuthenticationPrincipal Long userId) {
+        return Result.success(sessionService.listSessions(userId));
     }
 
     /**
@@ -46,8 +48,9 @@ public class RagChatController {
      * GET /api/rag-chat/sessions/{sessionId}
      */
     @GetMapping("/api/rag-chat/sessions/{sessionId}")
-    public Result<SessionDetailDTO> getSessionDetail(@PathVariable Long sessionId) {
-        return Result.success(sessionService.getSessionDetail(sessionId));
+    public Result<SessionDetailDTO> getSessionDetail(@PathVariable Long sessionId,
+                                                     @AuthenticationPrincipal Long userId) {
+        return Result.success(sessionService.getSessionDetail(sessionId, userId));
     }
 
     /**
@@ -56,8 +59,9 @@ public class RagChatController {
     @PutMapping("/api/rag-chat/sessions/{sessionId}/title")
     public Result<Void> updateSessionTitle(
             @PathVariable Long sessionId,
-            @Valid @RequestBody UpdateTitleRequest request) {
-        sessionService.updateSessionTitle(sessionId, request.title());
+            @Valid @RequestBody UpdateTitleRequest request,
+            @AuthenticationPrincipal Long userId) {
+        sessionService.updateSessionTitle(sessionId, userId, request.title());
         return Result.success(null);
     }
 
@@ -66,8 +70,9 @@ public class RagChatController {
      * PUT /api/rag-chat/sessions/{sessionId}/pin
      */
     @PutMapping("/api/rag-chat/sessions/{sessionId}/pin")
-    public Result<Void> togglePin(@PathVariable Long sessionId) {
-        sessionService.togglePin(sessionId);
+    public Result<Void> togglePin(@PathVariable Long sessionId,
+                                  @AuthenticationPrincipal Long userId) {
+        sessionService.togglePin(sessionId, userId);
         return Result.success(null);
     }
 
@@ -77,8 +82,9 @@ public class RagChatController {
     @PutMapping("/api/rag-chat/sessions/{sessionId}/knowledge-bases")
     public Result<Void> updateSessionKnowledgeBases(
             @PathVariable Long sessionId,
-            @Valid @RequestBody UpdateKnowledgeBasesRequest request) {
-        sessionService.updateSessionKnowledgeBases(sessionId, request.knowledgeBaseIds());
+            @Valid @RequestBody UpdateKnowledgeBasesRequest request,
+            @AuthenticationPrincipal Long userId) {
+        sessionService.updateSessionKnowledgeBases(sessionId, userId, request.knowledgeBaseIds());
         return Result.success(null);
     }
 
@@ -87,8 +93,9 @@ public class RagChatController {
      * DELETE /api/rag-chat/sessions/{sessionId}
      */
     @DeleteMapping("/api/rag-chat/sessions/{sessionId}")
-    public Result<Void> deleteSession(@PathVariable Long sessionId) {
-        sessionService.deleteSession(sessionId);
+    public Result<Void> deleteSession(@PathVariable Long sessionId,
+                                      @AuthenticationPrincipal Long userId) {
+        sessionService.deleteSession(sessionId, userId);
         return Result.success(null);
     }
 
@@ -103,18 +110,19 @@ public class RagChatController {
                  produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> sendMessageStream(
             @PathVariable Long sessionId,
-            @Valid @RequestBody SendMessageRequest request) {
+            @Valid @RequestBody SendMessageRequest request,
+            @AuthenticationPrincipal Long userId) {
 
         log.info("收到 RAG 聊天流式请求: sessionId={}, question={}, 线程: {} (虚拟线程: {})",
             sessionId, request.question(), Thread.currentThread(), Thread.currentThread().isVirtual());
 
         // 1. 准备消息（保存用户消息，创建 AI 消息占位）
-        Long messageId = sessionService.prepareStreamMessage(sessionId, request.question());
+        Long messageId = sessionService.prepareStreamMessage(sessionId, userId, request.question());
 
         // 2. 获取流式响应
         StringBuilder fullContent = new StringBuilder();
 
-        return sessionService.getStreamAnswer(sessionId, request.question())
+        return sessionService.getStreamAnswer(sessionId, userId, request.question())
             .doOnNext(fullContent::append)
             // 使用 ServerSentEvent 包装，转义换行符避免破坏 SSE 格式
             .map(chunk -> ServerSentEvent.<String>builder()

@@ -20,7 +20,7 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
-    record VectorizeTaskPayload(Long kbId, String content) {}
+    record VectorizeTaskPayload(Long kbId, Long userId, String content) {}
 
     public VectorizeStreamProducer(RedisService redisService, KnowledgeBaseRepository knowledgeBaseRepository) {
         super(redisService);
@@ -33,8 +33,8 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
      * @param kbId    知识库ID
      * @param content 文档内容
      */
-    public void sendVectorizeTask(Long kbId, String content) {
-        sendTask(new VectorizeTaskPayload(kbId, content));
+    public void sendVectorizeTask(Long kbId, Long userId, String content) {
+        sendTask(new VectorizeTaskPayload(kbId, userId, content));
     }
 
     @Override
@@ -51,6 +51,7 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
     protected Map<String, String> buildMessage(VectorizeTaskPayload payload) {
         return Map.of(
             AsyncTaskStreamConstants.FIELD_KB_ID, payload.kbId().toString(),
+            AsyncTaskStreamConstants.FIELD_USER_ID, payload.userId().toString(),
             AsyncTaskStreamConstants.FIELD_CONTENT, payload.content(),
             AsyncTaskStreamConstants.FIELD_RETRY_COUNT, "0"
         );
@@ -58,19 +59,19 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
 
     @Override
     protected String payloadIdentifier(VectorizeTaskPayload payload) {
-        return "kbId=" + payload.kbId();
+        return "kbId=" + payload.kbId() + ", userId=" + payload.userId();
     }
 
     @Override
     protected void onSendFailed(VectorizeTaskPayload payload, String error) {
-        updateVectorStatus(payload.kbId(), VectorStatus.FAILED, truncateError(error));
+        updateVectorStatus(payload.kbId(), payload.userId(), VectorStatus.FAILED, truncateError(error));
     }
 
     /**
      * 更新向量化状态
      */
-    private void updateVectorStatus(Long kbId, VectorStatus status, String error) {
-        knowledgeBaseRepository.findById(kbId).ifPresent(kb -> {
+    private void updateVectorStatus(Long kbId, Long userId, VectorStatus status, String error) {
+        knowledgeBaseRepository.findByIdAndUserId(kbId, userId).ifPresent(kb -> {
             kb.setVectorStatus(status);
             if (error != null) {
                 kb.setVectorError(error.length() > 500 ? error.substring(0, 500) : error);

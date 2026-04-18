@@ -56,9 +56,11 @@ public class KnowledgeBasePersistenceService {
      */
     @Transactional(rollbackFor = Exception.class)
     public KnowledgeBaseEntity saveKnowledgeBase(MultipartFile file, String name, String category,
-                                                  String storageKey, String storageUrl, String fileHash) {
+                                                 String storageKey, String storageUrl, String fileHash,
+                                                 Long userId) {
         try {
             KnowledgeBaseEntity kb = new KnowledgeBaseEntity();
+            kb.setUserId(userId);
             kb.setFileHash(fileHash);
             kb.setName(name != null && !name.trim().isEmpty() ? name : extractNameFromFilename(file.getOriginalFilename()));
             kb.setCategory(category != null && !category.trim().isEmpty() ? category.trim() : null);
@@ -81,8 +83,8 @@ public class KnowledgeBasePersistenceService {
      * 更新知识库向量化状态为 PENDING
      */
     @Transactional(rollbackFor = Exception.class)
-    public void updateVectorStatusToPending(Long kbId) {
-        KnowledgeBaseEntity kb = knowledgeBaseRepository.findById(kbId)
+    public void updateVectorStatusToPending(Long kbId, Long userId) {
+        KnowledgeBaseEntity kb = knowledgeBaseRepository.findByIdAndUserId(kbId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "知识库不存在"));
         
         kb.setVectorStatus(VectorStatus.PENDING);
@@ -106,4 +108,3 @@ public class KnowledgeBasePersistenceService {
         return filename;
     }
 }
-

@@ -22,6 +22,11 @@ public final class AsyncTaskStreamConstants {
      */
     public static final String FIELD_CONTENT = "content";
 
+    /**
+     * 用户ID字段
+     */
+    public static final String FIELD_USER_ID = "userId";
+
     // ========== 通用消费者配置 ==========
 
     /**

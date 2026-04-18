@@ -95,10 +95,11 @@ public class KnowledgeBaseQueryService {
      *
      * @param knowledgeBaseId 知识库ID
      * @param question 用户问题
+     * @param userId 当前登录用户ID
      * @return AI回答
      */
-    public String answerQuestion(Long knowledgeBaseId, String question) {
-        return answerQuestion(List.of(knowledgeBaseId), question);
+    public String answerQuestion(Long knowledgeBaseId, String question, Long userId) {
+        return answerQuestion(List.of(knowledgeBaseId), question, userId);
     }
 
     /**
@@ -106,16 +107,17 @@ public class KnowledgeBaseQueryService {
      *
      * @param knowledgeBaseIds 知识库ID列表
      * @param question 用户问题
+     * @param userId 当前登录用户ID
      * @return AI回答
      */
-    public String answerQuestion(List<Long> knowledgeBaseIds, String question) {
+    public String answerQuestion(List<Long> knowledgeBaseIds, String question, Long userId) {
         log.info("收到知识库提问: kbIds={}, question={}", knowledgeBaseIds, question);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalizeQuestion(question).isBlank()) {
             return NO_RESULT_RESPONSE;
         }
 
-        // 1. 验证知识库是否存在并更新问题计数（合并数据库操作）
-        countService.updateQuestionCounts(knowledgeBaseIds);
+        // 1. 验证知识库是否属于当前用户，并更新问题计数
+        countService.updateQuestionCounts(knowledgeBaseIds, userId);
 
         // 2. Query rewrite + 动态参数检索（RAG）
         QueryContext queryContext = buildQueryContext(question);
@@ -174,11 +176,11 @@ public class KnowledgeBaseQueryService {
     /**
      * 查询知识库并返回完整响应
      */
-    public QueryResponse queryKnowledgeBase(QueryRequest request) {
-        String answer = answerQuestion(request.knowledgeBaseIds(), request.question());
+    public QueryResponse queryKnowledgeBase(QueryRequest request, Long userId) {
+        String answer = answerQuestion(request.knowledgeBaseIds(), request.question(), userId);
 
         // 获取知识库名称（多个知识库用逗号分隔）
-        List<String> kbNames = listService.getKnowledgeBaseNames(request.knowledgeBaseIds());
+        List<String> kbNames = listService.getKnowledgeBaseNames(request.knowledgeBaseIds(), userId);
         String kbNamesStr = String.join("、", kbNames);
 
         // 使用第一个知识库ID作为主要标识（兼容前端）
@@ -192,17 +194,18 @@ public class KnowledgeBaseQueryService {
      *
      * @param knowledgeBaseIds 知识库ID列表
      * @param question 用户问题
+     * @param userId 当前登录用户ID
      * @return 流式响应
      */
-    public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question) {
+    public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, Long userId) {
         log.info("收到知识库流式提问: kbIds={}, question={}", knowledgeBaseIds, question);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalizeQuestion(question).isBlank()) {
             return Flux.just(NO_RESULT_RESPONSE);
         }
 
         try {
-            // 1. 验证知识库是否存在并更新问题计数
-            countService.updateQuestionCounts(knowledgeBaseIds);
+            // 1. 验证知识库是否属于当前用户并更新问题计数
+            countService.updateQuestionCounts(knowledgeBaseIds, userId);
 
             // 2. Query rewrite + 动态参数检索
             QueryContext queryContext = buildQueryContext(question);
@@ -458,4 +461,3 @@ public class KnowledgeBaseQueryService {
     private record QueryContext(String originalQuestion, List<String> candidateQueries, SearchParams searchParams) {
     }
 }
-

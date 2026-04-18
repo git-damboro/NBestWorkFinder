@@ -17,7 +17,7 @@ import java.util.Set;
  */
 @Entity
 @Table(name = "rag_chat_sessions", indexes = {
-    @Index(name = "idx_rag_session_updated", columnList = "updatedAt")
+    @Index(name = "idx_rag_session_user_updated", columnList = "user_id, updated_at")
 })
 @Getter
 @Setter
@@ -27,6 +27,12 @@ public class RagChatSessionEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /**
+     * 所属用户
+     */
+    @Column(name = "user_id")
+    private Long userId;
 
     /**
      * 会话标题（可自动生成或用户自定义）
@@ -62,12 +68,13 @@ public class RagChatSessionEntity {
     /**
      * 创建时间
      */
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     /**
      * 更新时间（最后一次消息时间）
      */
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     /**

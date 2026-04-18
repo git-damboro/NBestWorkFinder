@@ -45,7 +45,7 @@ public class ResumeDeleteService {
         }
         
         // 2. 删除面试会话（会自动删除面试答案）
-        interviewPersistenceService.deleteSessionsByResumeId(id);
+        interviewPersistenceService.deleteSessionsByResumeId(id, userId);
         
         // 3. 删除数据库记录（包括分析记录）
         persistenceService.deleteResume(id, userId);

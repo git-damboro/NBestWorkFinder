@@ -3,6 +3,7 @@ package com.nbwf.modules.interview.service;
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.common.model.AsyncTaskStatus;
+import com.nbwf.infrastructure.redis.InterviewSessionCache;
 import com.nbwf.modules.interview.model.InterviewAnswerEntity;
 import com.nbwf.modules.interview.model.InterviewQuestionDTO;
 import com.nbwf.modules.interview.model.InterviewReportDTO;
@@ -35,22 +36,24 @@ public class InterviewPersistenceService {
     private final InterviewSessionRepository sessionRepository;
     private final InterviewAnswerRepository answerRepository;
     private final ResumeRepository resumeRepository;
+    private final InterviewSessionCache sessionCache;
     private final ObjectMapper objectMapper;
     
     /**
      * 保存新的面试会话
      */
     @Transactional(rollbackFor = Exception.class)
-    public InterviewSessionEntity saveSession(String sessionId, Long resumeId, 
+    public InterviewSessionEntity saveSession(String sessionId, Long resumeId, Long userId,
                                               int totalQuestions, 
                                               List<InterviewQuestionDTO> questions) {
         try {
-            Optional<ResumeEntity> resumeOpt = resumeRepository.findById(resumeId);
+            Optional<ResumeEntity> resumeOpt = resumeRepository.findByIdAndUserId(resumeId, userId);
             if (resumeOpt.isEmpty()) {
                 throw new BusinessException(ErrorCode.RESUME_NOT_FOUND);
             }
             
             InterviewSessionEntity session = new InterviewSessionEntity();
+            session.setUserId(userId);
             session.setSessionId(sessionId);
             session.setResume(resumeOpt.get());
             session.setTotalQuestions(totalQuestions);
@@ -240,12 +243,26 @@ public class InterviewPersistenceService {
     public Optional<InterviewSessionEntity> findBySessionId(String sessionId) {
         return sessionRepository.findBySessionId(sessionId);
     }
+
+    /**
+     * 在当前用户范围内根据会话ID获取会话
+     */
+    public Optional<InterviewSessionEntity> findBySessionId(String sessionId, Long userId) {
+        return sessionRepository.findBySessionIdWithResumeAndUserId(sessionId, userId);
+    }
     
     /**
      * 获取简历的所有面试记录
      */
     public List<InterviewSessionEntity> findByResumeId(Long resumeId) {
         return sessionRepository.findByResumeIdOrderByCreatedAtDesc(resumeId);
+    }
+
+    /**
+     * 在当前用户范围内获取简历的所有面试记录
+     */
+    public List<InterviewSessionEntity> findByResumeId(Long resumeId, Long userId) {
+        return sessionRepository.findByResumeIdAndUserIdOrderByCreatedAtDesc(resumeId, userId);
     }
     
     /**
@@ -254,10 +271,11 @@ public class InterviewPersistenceService {
      * 删除会话会自动删除关联的答案
      */
     @Transactional(rollbackFor = Exception.class)
-    public void deleteSessionsByResumeId(Long resumeId) {
-        List<InterviewSessionEntity> sessions = sessionRepository.findByResumeIdOrderByCreatedAtDesc(resumeId);
+    public void deleteSessionsByResumeId(Long resumeId, Long userId) {
+        List<InterviewSessionEntity> sessions = sessionRepository.findByResumeIdAndUserIdOrderByCreatedAtDesc(resumeId, userId);
         if (!sessions.isEmpty()) {
             sessionRepository.deleteAll(sessions);
+            sessions.forEach(session -> sessionCache.deleteSession(session.getSessionId()));
             log.info("已删除 {} 个面试会话（包含所有答案）", sessions.size());
         }
     }
@@ -272,7 +290,23 @@ public class InterviewPersistenceService {
         Optional<InterviewSessionEntity> sessionOpt = sessionRepository.findBySessionId(sessionId);
         if (sessionOpt.isPresent()) {
             sessionRepository.delete(sessionOpt.get());
+            sessionCache.deleteSession(sessionId);
             log.info("已删除面试会话: sessionId={}", sessionId);
+        } else {
+            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND);
+        }
+    }
+
+    /**
+     * 在当前用户范围内删除单个面试会话
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteSessionBySessionId(String sessionId, Long userId) {
+        Optional<InterviewSessionEntity> sessionOpt = sessionRepository.findBySessionIdAndUserId(sessionId, userId);
+        if (sessionOpt.isPresent()) {
+            sessionRepository.delete(sessionOpt.get());
+            sessionCache.deleteSession(sessionId);
+            log.info("已删除用户面试会话: sessionId={}, userId={}", sessionId, userId);
         } else {
             throw new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND);
         }
@@ -287,6 +321,21 @@ public class InterviewPersistenceService {
             InterviewSessionEntity.SessionStatus.IN_PROGRESS
         );
         return sessionRepository.findFirstByResumeIdAndStatusInOrderByCreatedAtDesc(resumeId, unfinishedStatuses);
+    }
+
+    /**
+     * 在当前用户范围内查找未完成的面试会话
+     */
+    public Optional<InterviewSessionEntity> findUnfinishedSession(Long resumeId, Long userId) {
+        List<InterviewSessionEntity.SessionStatus> unfinishedStatuses = List.of(
+            InterviewSessionEntity.SessionStatus.CREATED,
+            InterviewSessionEntity.SessionStatus.IN_PROGRESS
+        );
+        return sessionRepository.findFirstByResumeIdAndUserIdAndStatusInOrderByCreatedAtDesc(
+            resumeId,
+            userId,
+            unfinishedStatuses
+        );
     }
     
     /**
@@ -321,6 +370,37 @@ public class InterviewPersistenceService {
             })
             .distinct()
             .limit(30) // 核心改动：只保留最近的 30 道题
+            .toList();
+    }
+
+    /**
+     * 在当前用户范围内获取简历的历史提问列表
+     */
+    public List<String> getHistoricalQuestionsByResumeId(Long resumeId, Long userId) {
+        List<InterviewSessionEntity> sessions = sessionRepository.findTop10ByResumeIdAndUserIdOrderByCreatedAtDesc(
+            resumeId,
+            userId
+        );
+
+        return sessions.stream()
+            .map(InterviewSessionEntity::getQuestionsJson)
+            .filter(json -> json != null && !json.isEmpty())
+            .flatMap(json -> {
+                try {
+                    List<InterviewQuestionDTO> questions = objectMapper.readValue(
+                        json,
+                        new TypeReference<List<InterviewQuestionDTO>>() {}
+                    );
+                    return questions.stream()
+                        .filter(q -> !q.isFollowUp())
+                        .map(InterviewQuestionDTO::question);
+                } catch (Exception e) {
+                    log.error("解析历史问题JSON失败", e);
+                    return java.util.stream.Stream.empty();
+                }
+            })
+            .distinct()
+            .limit(30)
             .toList();
     }
 }

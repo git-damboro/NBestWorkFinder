@@ -55,7 +55,7 @@ public class ResumeHistoryService {
             }
 
             // 获取面试次数
-            int interviewCount = interviewPersistenceService.findByResumeId(resume.getId()).size();
+            int interviewCount = interviewPersistenceService.findByResumeId(resume.getId(), userId).size();
 
             // 使用 MapStruct 映射
             return new ResumeListItemDTO(
@@ -92,7 +92,7 @@ public class ResumeHistoryService {
 
         // 使用 InterviewMapper 转换面试历史
         List<Object> interviewHistory = interviewMapper.toInterviewHistoryList(
-            interviewPersistenceService.findByResumeId(id)
+            interviewPersistenceService.findByResumeId(id, userId)
         );
 
         return new ResumeDetailDTO(

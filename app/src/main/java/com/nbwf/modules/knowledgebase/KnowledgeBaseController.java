@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Flux;
@@ -47,7 +48,8 @@ public class KnowledgeBaseController {
     @GetMapping("/api/knowledgebase/list")
     public Result<List<KnowledgeBaseListItemDTO>> getAllKnowledgeBases(
             @RequestParam(value = "sortBy", required = false) String sortBy,
-            @RequestParam(value = "vectorStatus", required = false) String vectorStatus) {
+            @RequestParam(value = "vectorStatus", required = false) String vectorStatus,
+            @AuthenticationPrincipal Long userId) {
         
         VectorStatus status = null;
         if (vectorStatus != null && !vectorStatus.isBlank()) {
@@ -58,15 +60,16 @@ public class KnowledgeBaseController {
             }
         }
         
-        return Result.success(listService.listKnowledgeBases(status, sortBy));
+        return Result.success(listService.listKnowledgeBases(userId, status, sortBy));
     }
 
     /**
      * 获取知识库详情
      */
     @GetMapping("/api/knowledgebase/{id}")
-    public Result<KnowledgeBaseListItemDTO> getKnowledgeBase(@PathVariable Long id) {
-        return listService.getKnowledgeBase(id)
+    public Result<KnowledgeBaseListItemDTO> getKnowledgeBase(@PathVariable Long id,
+                                                             @AuthenticationPrincipal Long userId) {
+        return listService.getKnowledgeBase(id, userId)
                 .map(Result::success)
                 .orElse(Result.error("知识库不存在"));
     }
@@ -75,8 +78,9 @@ public class KnowledgeBaseController {
      * 删除知识库
      */
     @DeleteMapping("/api/knowledgebase/{id}")
-    public Result<Void> deleteKnowledgeBase(@PathVariable Long id) {
-        deleteService.deleteKnowledgeBase(id);
+    public Result<Void> deleteKnowledgeBase(@PathVariable Long id,
+                                            @AuthenticationPrincipal Long userId) {
+        deleteService.deleteKnowledgeBase(id, userId);
         return Result.success(null);
     }
 
@@ -86,8 +90,9 @@ public class KnowledgeBaseController {
     @PostMapping("/api/knowledgebase/query")
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 10)
     @RateLimit(dimension = RateLimit.Dimension.IP, count = 10)
-    public Result<QueryResponse> queryKnowledgeBase(@Valid @RequestBody QueryRequest request) {
-        return Result.success(queryService.queryKnowledgeBase(request));
+    public Result<QueryResponse> queryKnowledgeBase(@Valid @RequestBody QueryRequest request,
+                                                    @AuthenticationPrincipal Long userId) {
+        return Result.success(queryService.queryKnowledgeBase(request, userId));
     }
 
     /**
@@ -96,10 +101,11 @@ public class KnowledgeBaseController {
     @PostMapping(value = "/api/knowledgebase/query/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 5)
     @RateLimit(dimension = RateLimit.Dimension.IP, count = 5)
-    public Flux<String> queryKnowledgeBaseStream(@Valid @RequestBody QueryRequest request) {
+    public Flux<String> queryKnowledgeBaseStream(@Valid @RequestBody QueryRequest request,
+                                                 @AuthenticationPrincipal Long userId) {
         log.debug("收到知识库流式查询请求: kbIds={}, question={}, 线程: {} (虚拟线程: {})",
             request.knowledgeBaseIds(), request.question(), Thread.currentThread(), Thread.currentThread().isVirtual());
-        return queryService.answerQuestionStream(request.knowledgeBaseIds(), request.question());
+        return queryService.answerQuestionStream(request.knowledgeBaseIds(), request.question(), userId);
     }
 
     // ========== 分类管理 API ==========
@@ -108,32 +114,35 @@ public class KnowledgeBaseController {
      * 获取所有分类
      */
     @GetMapping("/api/knowledgebase/categories")
-    public Result<List<String>> getAllCategories() {
-        return Result.success(listService.getAllCategories());
+    public Result<List<String>> getAllCategories(@AuthenticationPrincipal Long userId) {
+        return Result.success(listService.getAllCategories(userId));
     }
 
     /**
      * 根据分类获取知识库列表
      */
     @GetMapping("/api/knowledgebase/category/{category}")
-    public Result<List<KnowledgeBaseListItemDTO>> getByCategory(@PathVariable String category) {
-        return Result.success(listService.listByCategory(category));
+    public Result<List<KnowledgeBaseListItemDTO>> getByCategory(@PathVariable String category,
+                                                                @AuthenticationPrincipal Long userId) {
+        return Result.success(listService.listByCategory(userId, category));
     }
 
     /**
      * 获取未分类的知识库
      */
     @GetMapping("/api/knowledgebase/uncategorized")
-    public Result<List<KnowledgeBaseListItemDTO>> getUncategorized() {
-        return Result.success(listService.listByCategory(null));
+    public Result<List<KnowledgeBaseListItemDTO>> getUncategorized(@AuthenticationPrincipal Long userId) {
+        return Result.success(listService.listByCategory(userId, null));
     }
 
     /**
      * 更新知识库分类
      */
     @PutMapping("/api/knowledgebase/{id}/category")
-    public Result<Void> updateCategory(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        listService.updateCategory(id, body.get("category"));
+    public Result<Void> updateCategory(@PathVariable Long id,
+                                       @RequestBody Map<String, String> body,
+                                       @AuthenticationPrincipal Long userId) {
+        listService.updateCategory(id, body.get("category"), userId);
         return Result.success(null);
     }
 
@@ -148,17 +157,19 @@ public class KnowledgeBaseController {
     public Result<Map<String, Object>> uploadKnowledgeBase(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "name", required = false) String name,
-            @RequestParam(value = "category", required = false) String category) {
-        return Result.success(uploadService.uploadKnowledgeBase(file, name, category));
+            @RequestParam(value = "category", required = false) String category,
+            @AuthenticationPrincipal Long userId) {
+        return Result.success(uploadService.uploadKnowledgeBase(file, name, category, userId));
     }
 
     /**
      * 下载知识库文件
      */
     @GetMapping("/api/knowledgebase/{id}/download")
-    public ResponseEntity<byte[]> downloadKnowledgeBase(@PathVariable Long id) {
-        var entity = listService.getEntityForDownload(id);
-        byte[] fileContent = listService.downloadFile(id);
+    public ResponseEntity<byte[]> downloadKnowledgeBase(@PathVariable Long id,
+                                                        @AuthenticationPrincipal Long userId) {
+        var entity = listService.getEntityForDownload(id, userId);
+        byte[] fileContent = listService.downloadFile(id, userId);
 
         String filename = entity.getOriginalFilename();
         String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
@@ -179,8 +190,9 @@ public class KnowledgeBaseController {
      * 搜索知识库
      */
     @GetMapping("/api/knowledgebase/search")
-    public Result<List<KnowledgeBaseListItemDTO>> search(@RequestParam("keyword") String keyword) {
-        return Result.success(listService.search(keyword));
+    public Result<List<KnowledgeBaseListItemDTO>> search(@RequestParam("keyword") String keyword,
+                                                         @AuthenticationPrincipal Long userId) {
+        return Result.success(listService.search(keyword, userId));
     }
 
     // ========== 统计 API ==========
@@ -189,8 +201,8 @@ public class KnowledgeBaseController {
      * 获取知识库统计信息
      */
     @GetMapping("/api/knowledgebase/stats")
-    public Result<KnowledgeBaseStatsDTO> getStatistics() {
-        return Result.success(listService.getStatistics());
+    public Result<KnowledgeBaseStatsDTO> getStatistics(@AuthenticationPrincipal Long userId) {
+        return Result.success(listService.getStatistics(userId));
     }
 
     // ========== 向量化管理 API ==========
@@ -202,8 +214,9 @@ public class KnowledgeBaseController {
     @PostMapping("/api/knowledgebase/{id}/revectorize")
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 2)
     @RateLimit(dimension = RateLimit.Dimension.IP, count = 2)
-    public Result<Void> revectorize(@PathVariable Long id) {
-        uploadService.revectorize(id);
+    public Result<Void> revectorize(@PathVariable Long id,
+                                    @AuthenticationPrincipal Long userId) {
+        uploadService.revectorize(id, userId);
         return Result.success(null);
     }
 

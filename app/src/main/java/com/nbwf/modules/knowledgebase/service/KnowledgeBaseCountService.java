@@ -30,7 +30,7 @@ public class KnowledgeBaseCountService {
      * @param knowledgeBaseIds 知识库ID列表
      */
     @Transactional(rollbackFor = Exception.class)
-    public void updateQuestionCounts(List<Long> knowledgeBaseIds) {
+    public void updateQuestionCounts(List<Long> knowledgeBaseIds, Long userId) {
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty()) {
             return;
         }
@@ -38,8 +38,8 @@ public class KnowledgeBaseCountService {
         // 去重
         List<Long> uniqueIds = knowledgeBaseIds.stream().distinct().toList();
 
-        // 验证所有知识库是否存在
-        Set<Long> existingIds = new HashSet<>(knowledgeBaseRepository.findAllById(uniqueIds)
+        // 验证所有知识库是否属于当前用户
+        Set<Long> existingIds = new HashSet<>(knowledgeBaseRepository.findAllByIdInAndUserId(uniqueIds, userId)
                 .stream().map(KnowledgeBaseEntity::getId).toList());
 
         for (Long id : uniqueIds) {
@@ -49,7 +49,7 @@ public class KnowledgeBaseCountService {
         }
 
         // 批量更新（单条 SQL）
-        int updated = knowledgeBaseRepository.incrementQuestionCountBatch(uniqueIds);
+        int updated = knowledgeBaseRepository.incrementQuestionCountBatch(userId, uniqueIds);
         log.debug("批量更新知识库提问计数: ids={}, updated={}", uniqueIds, updated);
     }
 }

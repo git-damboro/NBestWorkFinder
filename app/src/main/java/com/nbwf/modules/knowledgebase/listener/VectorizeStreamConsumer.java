@@ -33,7 +33,7 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
         this.knowledgeBaseRepository = knowledgeBaseRepository;
     }
 
-    record VectorizePayload(Long kbId, String content) {}
+    record VectorizePayload(Long kbId, Long userId, String content) {}
 
     @Override
     protected String taskDisplayName() {
@@ -63,46 +63,60 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
     @Override
     protected VectorizePayload parsePayload(StreamMessageId messageId, Map<String, String> data) {
         String kbIdStr = data.get(AsyncTaskStreamConstants.FIELD_KB_ID);
+        String userIdStr = data.get(AsyncTaskStreamConstants.FIELD_USER_ID);
         String content = data.get(AsyncTaskStreamConstants.FIELD_CONTENT);
         if (kbIdStr == null || content == null) {
             log.warn("消息格式错误，跳过: messageId={}", messageId);
             return null;
         }
-        return new VectorizePayload(Long.parseLong(kbIdStr), content);
+        Long kbId = Long.parseLong(kbIdStr);
+        Long userId = userIdStr != null
+            ? Long.parseLong(userIdStr)
+            : knowledgeBaseRepository.findById(kbId).map(kb -> kb.getUserId()).orElse(null);
+        if (userId == null) {
+            log.warn("向量化消息缺少用户归属，跳过: messageId={}, kbId={}", messageId, kbId);
+            return null;
+        }
+        return new VectorizePayload(kbId, userId, content);
     }
 
     @Override
     protected String payloadIdentifier(VectorizePayload payload) {
-        return "kbId=" + payload.kbId();
+        return "kbId=" + payload.kbId() + ", userId=" + payload.userId();
     }
 
     @Override
     protected void markProcessing(VectorizePayload payload) {
-        updateVectorStatus(payload.kbId(), VectorStatus.PROCESSING, null);
+        updateVectorStatus(payload.kbId(), payload.userId(), VectorStatus.PROCESSING, null);
     }
 
     @Override
     protected void processBusiness(VectorizePayload payload) {
+        if (knowledgeBaseRepository.findByIdAndUserId(payload.kbId(), payload.userId()).isEmpty()) {
+            throw new IllegalStateException("知识库不存在或不属于当前任务用户: kbId=" + payload.kbId());
+        }
         vectorService.vectorizeAndStore(payload.kbId(), payload.content());
     }
 
     @Override
     protected void markCompleted(VectorizePayload payload) {
-        updateVectorStatus(payload.kbId(), VectorStatus.COMPLETED, null);
+        updateVectorStatus(payload.kbId(), payload.userId(), VectorStatus.COMPLETED, null);
     }
 
     @Override
     protected void markFailed(VectorizePayload payload, String error) {
-        updateVectorStatus(payload.kbId(), VectorStatus.FAILED, error);
+        updateVectorStatus(payload.kbId(), payload.userId(), VectorStatus.FAILED, error);
     }
 
     @Override
     protected void retryMessage(VectorizePayload payload, int retryCount) {
         Long kbId = payload.kbId();
+        Long userId = payload.userId();
         String content = payload.content();
         try {
             Map<String, String> message = Map.of(
                 AsyncTaskStreamConstants.FIELD_KB_ID, kbId.toString(),
+                AsyncTaskStreamConstants.FIELD_USER_ID, userId.toString(),
                 AsyncTaskStreamConstants.FIELD_CONTENT, content,
                 AsyncTaskStreamConstants.FIELD_RETRY_COUNT, String.valueOf(retryCount)
             );
@@ -116,16 +130,16 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
 
         } catch (Exception e) {
             log.error("重试入队失败: kbId={}, error={}", kbId, e.getMessage(), e);
-            updateVectorStatus(kbId, VectorStatus.FAILED, truncateError("重试入队失败: " + e.getMessage()));
+            updateVectorStatus(kbId, userId, VectorStatus.FAILED, truncateError("重试入队失败: " + e.getMessage()));
         }
     }
 
     /**
      * 更新向量化状态
      */
-    private void updateVectorStatus(Long kbId, VectorStatus status, String error) {
+    private void updateVectorStatus(Long kbId, Long userId, VectorStatus status, String error) {
         try {
-            knowledgeBaseRepository.findById(kbId).ifPresent(kb -> {
+            knowledgeBaseRepository.findByIdAndUserId(kbId, userId).ifPresent(kb -> {
                 kb.setVectorStatus(status);
                 kb.setVectorError(error);
                 knowledgeBaseRepository.save(kb);
