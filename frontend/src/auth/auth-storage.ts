@@ -13,7 +13,13 @@ export function toAuthSession(response: AuthResponse): AuthSession {
 }
 
 export function loadAuthSession(): AuthSession | null {
-  const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(AUTH_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+
   if (!raw) {
     return null;
   }
@@ -38,11 +44,15 @@ export function loadAuthSession(): AuthSession | null {
 }
 
 export function saveAuthSession(session: AuthSession): void {
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  try {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+  } catch {}
 }
 
 export function clearAuthSession(): void {
-  localStorage.removeItem(AUTH_STORAGE_KEY);
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {}
 }
 
 export function getAccessToken(): string | null {
