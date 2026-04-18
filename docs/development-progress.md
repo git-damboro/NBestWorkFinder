@@ -8,7 +8,7 @@
 |---|---|
 | 项目名称 | `NBestWorkFinder` |
 | 当前阶段 | 用户模块登录注册闭环设计已确认，实施计划已编写，准备进入实现阶段 |
-| 当前目标 | 完成前端认证基础类型与本地存储工具 |
+| 当前目标 | 完成请求层 Token 注入与路由守卫 |
 | 下一阶段 | 在认证闭环稳定后，推进 `resume / interview / knowledgebase` 用户隔离 |
 
 ## 2. 模块进度总览
@@ -39,6 +39,7 @@
 | 分类 | 已完成项 |
 |---|---|
 | 后端认证 | 注册、登录、刷新 Token、退出接口已实现 |
+| 前端认证 | 已新增认证 API 封装与 `AuthContext` 登录态管理 |
 | JWT 体系 | AccessToken + RefreshToken 已实现，RefreshToken 已存入 Redis |
 | 基础设施 | PostgreSQL、Redis、RustFS、Swagger、PDF 导出、Redis Stream 已可用 |
 | 核心业务 | 简历分析、模拟面试、知识库 RAG、职位管理后端已具备 |
@@ -90,9 +91,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 目标 | 执行用户登录注册闭环实施计划的第一批任务 |
-| 具体任务 | 新增认证类型、本地存储工具、认证 API 与 `AuthContext` |
-| 完成标准 | 前端具备统一登录态管理能力，为登录页、注册页和路由守卫提供支撑 |
+| 目标 | 完成请求层 Token 注入与路由守卫 |
+| 具体任务 | 修改 `request.ts` 注入 Bearer Token，并补 `ProtectedRoute` / `PublicRoute` |
+| 完成标准 | 未登录不能进入业务页，业务请求自动携带登录 Token |
 
 ## 10. 文档维护规则
 
