@@ -41,6 +41,7 @@
 | 后端认证 | 注册、登录、刷新 Token、退出接口已实现 |
 | 前端认证 | 已新增认证 API 封装与 `AuthContext` 登录态管理 |
 | 前端认证 | 请求层已支持自动注入 Bearer Token，并在 401 时清理本地登录态 |
+| 前端认证 | 已新增登录页与注册页 |
 | JWT 体系 | AccessToken + RefreshToken 已实现，RefreshToken 已存入 Redis |
 | 基础设施 | PostgreSQL、Redis、RustFS、Swagger、PDF 导出、Redis Stream 已可用 |
 | 核心业务 | 简历分析、模拟面试、知识库 RAG、职位管理后端已具备 |
