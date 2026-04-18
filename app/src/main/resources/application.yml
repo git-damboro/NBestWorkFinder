@@ -26,7 +26,7 @@ spring:
 
   # PostgreSQL数据库配置
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:interview_guide}
+    url: jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:5432}/${POSTGRES_DB:interview_guide}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:123456}
     driver-class-name: org.postgresql.Driver
@@ -117,8 +117,8 @@ app:
   # RustFS (S3兼容) 存储配置
   storage:
     endpoint: ${APP_STORAGE_ENDPOINT:http://localhost:9000}
-    access-key: ${APP_STORAGE_ACCESS_KEY:wr45VXJZhCxc6FAWz0YR}
-    secret-key: ${APP_STORAGE_SECRET_KEY:GtKxV57WJkpw4CvASPBzTy2DYElLnRqh8dIXQa0m}
+    access-key: ${APP_STORAGE_ACCESS_KEY:rustfsadmin}
+    secret-key: ${APP_STORAGE_SECRET_KEY:rustfsadmin}
     bucket: ${APP_STORAGE_BUCKET:nbwf}
     region: ${APP_STORAGE_REGION:us-east-1}
   

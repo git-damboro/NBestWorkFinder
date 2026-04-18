@@ -243,9 +243,9 @@ export AI_BAILIAN_API_KEY=your_api_key
 spring:
   # PostgreSQL数据库配置
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:interview_guide}
+    url: jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:5432}/${POSTGRES_DB:interview_guide}
     username: ${POSTGRES_USER:postgres}
-    password: ${POSTGRES_PASSWORD:123456}
+    password: ${POSTGRES_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
 
   jpa:

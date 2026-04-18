@@ -3,6 +3,7 @@ package com.nbwf.modules.user.config;
 import com.nbwf.modules.user.filter.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -17,6 +18,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -25,20 +27,27 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
     private final UserDetailsService userDetailsService;
+    private final CorsConfigurationSource corsConfigurationSource;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter, UserDetailsService userDetailsService) {
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter,
+                          UserDetailsService userDetailsService,
+                          CorsConfigurationSource corsConfigurationSource) {
         this.jwtFilter = jwtFilter;
         this.userDetailsService = userDetailsService;
+        this.corsConfigurationSource = corsConfigurationSource;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
+            .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(
                     "/api/auth/**",
+                    "/api/resumes/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/v3/api-docs/**"
