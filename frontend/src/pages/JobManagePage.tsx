@@ -1,0 +1,768 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+  AlertCircle,
+  Briefcase,
+  Building2,
+  CalendarDays,
+  Edit3,
+  Loader2,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Target,
+  Trash2,
+} from 'lucide-react';
+import { jobApi } from '../api';
+import { getErrorMessage } from '../api/request';
+import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
+import JobFormDialog, { type JobFormData, type JobFormMode } from '../components/JobFormDialog';
+import JobMatchDialog from '../components/JobMatchDialog';
+import type { CreateJobForm, JobApplicationStatus, JobDetail, JobListItem, UpdateJobForm } from '../types/job';
+import { jobStatusLabelMap, jobStatusOptions } from '../types/job';
+import { formatDateOnly, formatDateTime } from '../utils/date';
+
+type StatusFilter = JobApplicationStatus | 'ALL';
+
+const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'ALL', label: '全部状态' },
+  ...jobStatusOptions,
+];
+
+function formatSalaryRange(salaryMin: number | null, salaryMax: number | null) {
+  if (salaryMin !== null && salaryMax !== null) {
+    return `￥${salaryMin.toLocaleString()} - ￥${salaryMax.toLocaleString()}`;
+  }
+  if (salaryMin !== null) {
+    return `￥${salaryMin.toLocaleString()} 起`;
+  }
+  if (salaryMax !== null) {
+    return `最高 ￥${salaryMax.toLocaleString()}`;
+  }
+  return '薪资未填写';
+}
+
+function getStatusBadgeClass(status: JobApplicationStatus) {
+  switch (status) {
+    case 'SAVED':
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+    case 'APPLIED':
+      return 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300';
+    case 'INTERVIEWING':
+      return 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+    case 'OFFERED':
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
+    case 'REJECTED':
+      return 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300';
+    default:
+      return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+  }
+}
+
+function buildFormInitialData(job?: JobDetail | null): JobFormData | null {
+  if (!job) {
+    return null;
+  }
+
+  return {
+    title: job.title,
+    company: job.company,
+    description: job.description,
+    location: job.location ?? '',
+    salaryMin: job.salaryMin ?? undefined,
+    salaryMax: job.salaryMax ?? undefined,
+    applicationStatus: job.applicationStatus,
+    notes: job.notes ?? '',
+  };
+}
+
+function normalizeOptionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function toCreatePayload(data: JobFormData): CreateJobForm {
+  return {
+    title: data.title,
+    company: data.company,
+    description: data.description,
+    location: normalizeOptionalText(data.location),
+    salaryMin: data.salaryMin,
+    salaryMax: data.salaryMax,
+    notes: normalizeOptionalText(data.notes),
+  };
+}
+
+function toUpdatePayload(data: JobFormData): UpdateJobForm {
+  return {
+    title: data.title,
+    company: data.company,
+    description: data.description,
+    location: normalizeOptionalText(data.location),
+    salaryMin: data.salaryMin,
+    salaryMax: data.salaryMax,
+    applicationStatus: data.applicationStatus,
+    notes: normalizeOptionalText(data.notes),
+  };
+}
+
+function matchKeyword(job: JobListItem, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (!normalizedKeyword) {
+    return true;
+  }
+
+  return [job.title, job.company, job.location ?? '', ...job.techTags]
+    .join(' ')
+    .toLowerCase()
+    .includes(normalizedKeyword);
+}
+
+export default function JobManagePage() {
+  const [jobs, setJobs] = useState<JobListItem[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const [selectedJob, setSelectedJob] = useState<JobDetail | null>(null);
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<JobFormMode>('create');
+  const [submitting, setSubmitting] = useState(false);
+  const [matchOpen, setMatchOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<JobDetail | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
+  const selectedJobIdRef = useRef<number | null>(null);
+  const detailRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    selectedJobIdRef.current = selectedJobId;
+  }, [selectedJobId]);
+
+  const loadJobDetail = useCallback(async (jobId: number) => {
+    const requestId = ++detailRequestIdRef.current;
+    setLoadingDetail(true);
+    setDetailError(null);
+
+    try {
+      const data = await jobApi.getJobDetail(jobId);
+      if (detailRequestIdRef.current !== requestId) {
+        return;
+      }
+      setSelectedJob(data);
+    } catch (error) {
+      if (detailRequestIdRef.current !== requestId) {
+        return;
+      }
+      setSelectedJob(null);
+      setDetailError(getErrorMessage(error));
+    } finally {
+      if (detailRequestIdRef.current === requestId) {
+        setLoadingDetail(false);
+      }
+    }
+  }, []);
+
+  const loadJobs = useCallback(
+    async (preferredId?: number | null) => {
+      setLoadingList(true);
+      setListError(null);
+
+      try {
+        const data = await jobApi.getJobs(statusFilter === 'ALL' ? undefined : statusFilter);
+        setJobs(data);
+
+        if (data.length === 0) {
+          setSelectedJobId(null);
+          setSelectedJob(null);
+          setDetailError(null);
+          return;
+        }
+
+        const currentId = preferredId ?? selectedJobIdRef.current;
+        const nextSelectedId =
+          currentId !== null && data.some((job) => job.id === currentId) ? currentId : data[0].id;
+
+        setSelectedJobId(nextSelectedId);
+      } catch (error) {
+        setListError(getErrorMessage(error));
+        setJobs([]);
+        setSelectedJobId(null);
+        setSelectedJob(null);
+      } finally {
+        setLoadingList(false);
+      }
+    },
+    [statusFilter],
+  );
+
+  useEffect(() => {
+    void loadJobs();
+  }, [loadJobs]);
+
+  useEffect(() => {
+    if (selectedJobId === null) {
+      setSelectedJob(null);
+      setDetailError(null);
+      return;
+    }
+
+    void loadJobDetail(selectedJobId);
+  }, [selectedJobId, loadJobDetail]);
+
+  const filteredJobs = useMemo(
+    () => jobs.filter((job) => matchKeyword(job, searchKeyword)),
+    [jobs, searchKeyword],
+  );
+
+  useEffect(() => {
+    if (filteredJobs.length === 0) {
+      return;
+    }
+
+    if (!filteredJobs.some((job) => job.id === selectedJobId)) {
+      setSelectedJobId(filteredJobs[0].id);
+    }
+  }, [filteredJobs, selectedJobId]);
+
+  const selectedJobSummary = useMemo(
+    () => jobs.find((job) => job.id === selectedJobId) ?? null,
+    [jobs, selectedJobId],
+  );
+
+  const uniqueTagCount = useMemo(
+    () => new Set(jobs.flatMap((job) => job.techTags)).size,
+    [jobs],
+  );
+
+  const formInitialJob = formMode === 'edit' ? buildFormInitialData(selectedJob) : null;
+
+  const openCreateDialog = () => {
+    setActionError(null);
+    setFormMode('create');
+    setFormOpen(true);
+  };
+
+  const openEditDialog = () => {
+    if (!selectedJob) {
+      return;
+    }
+    setActionError(null);
+    setFormMode('edit');
+    setFormOpen(true);
+  };
+
+  const handleRefresh = () => {
+    void loadJobs(selectedJobIdRef.current);
+  };
+
+  const handleSubmit = async (data: JobFormData) => {
+    setSubmitting(true);
+    setActionError(null);
+
+    try {
+      if (formMode === 'create') {
+        // 后端创建接口默认先落一条职位记录；若用户在弹窗里选择了其他状态，再补一次更新即可。
+        const createdJob = await jobApi.createJob(toCreatePayload(data));
+        const targetJob =
+          data.applicationStatus === 'SAVED'
+            ? createdJob
+            : await jobApi.updateJob(createdJob.id, { applicationStatus: data.applicationStatus });
+
+        setFormOpen(false);
+        await loadJobs(targetJob.id);
+        await loadJobDetail(targetJob.id);
+      } else if (selectedJob) {
+        await jobApi.updateJob(selectedJob.id, toUpdatePayload(data));
+        setFormOpen(false);
+        await loadJobs(selectedJob.id);
+        await loadJobDetail(selectedJob.id);
+      }
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setDeleting(true);
+    setActionError(null);
+
+    try {
+      const deletedId = deleteTarget.id;
+      await jobApi.deleteJob(deletedId);
+      setDeleteTarget(null);
+      await loadJobs(selectedJobIdRef.current === deletedId ? null : selectedJobIdRef.current);
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="flex items-center gap-3 text-2xl font-bold text-slate-800 dark:text-white">
+            <Briefcase className="h-7 w-7 text-primary-500" />
+            职位工作台
+          </h1>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">
+            集中管理收藏职位、投递进度与简历匹配结果。
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            <RefreshCw className="h-4 w-4" />
+            刷新列表
+          </button>
+          <button
+            type="button"
+            onClick={openCreateDialog}
+            className="flex items-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+          >
+            <Plus className="h-4 w-4" />
+            新增职位
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <SummaryCard
+          icon={Briefcase}
+          label="职位总数"
+          value={jobs.length.toString()}
+          hint="当前状态筛选下的职位数量"
+          colorClass="bg-primary-500"
+        />
+        <SummaryCard
+          icon={Target}
+          label="可见结果"
+          value={filteredJobs.length.toString()}
+          hint="关键词搜索后的列表结果"
+          colorClass="bg-indigo-500"
+        />
+        <SummaryCard
+          icon={Sparkles}
+          label="标签覆盖"
+          value={uniqueTagCount.toString()}
+          hint="已提取技术标签的去重总数"
+          colorClass="bg-emerald-500"
+        />
+      </div>
+
+      {actionError && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/70 dark:bg-red-900/30 dark:text-red-200">
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <span>{actionError}</span>
+        </div>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-[360px,1fr]">
+        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div className="mb-4 flex flex-col gap-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+                placeholder="搜索职位、公司、地点或标签"
+                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-700 outline-none transition-colors focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-primary-900/30"
+              />
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-primary-900/30"
+            >
+              {statusFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">职位列表</h2>
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              共 {filteredJobs.length} 条
+            </span>
+          </div>
+
+          {loadingList && (
+            <div className="flex min-h-[280px] items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
+            </div>
+          )}
+
+          {!loadingList && listError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/70 dark:bg-red-900/30 dark:text-red-200">
+              <p>{listError}</p>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                className="mt-3 rounded-lg bg-white px-3 py-2 text-xs font-medium text-red-600 dark:bg-slate-800 dark:text-red-300"
+              >
+                重试加载
+              </button>
+            </div>
+          )}
+
+          {!loadingList && !listError && jobs.length === 0 && (
+            <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+              <Briefcase className="mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">还没有职位记录</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                先新增一个职位，后续就可以在这里跟踪投递和匹配结果。
+              </p>
+            </div>
+          )}
+
+          {!loadingList && !listError && jobs.length > 0 && filteredJobs.length === 0 && (
+            <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+              <Search className="mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">没有匹配的职位</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                试试修改关键词，或者切换投递状态筛选。
+              </p>
+            </div>
+          )}
+
+          {!loadingList && !listError && filteredJobs.length > 0 && (
+            <div className="max-h-[720px] space-y-3 overflow-y-auto pr-1">
+              {filteredJobs.map((job, index) => {
+                const active = job.id === selectedJobId;
+
+                return (
+                  <motion.button
+                    key={job.id}
+                    type="button"
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    onClick={() => setSelectedJobId(job.id)}
+                    className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                      active
+                        ? 'border-primary-500 bg-primary-50 shadow-sm dark:bg-primary-900/20'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {job.title}
+                        </h3>
+                        <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">
+                          {job.company}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(job.applicationStatus)}`}
+                      >
+                        {jobStatusLabelMap[job.applicationStatus]}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 space-y-2 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5" />
+                        <span>{job.location || '地点未填写'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        <span>创建于 {formatDateOnly(job.createdAt)}</span>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                      {formatSalaryRange(job.salaryMin, job.salaryMax)}
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {job.techTags.length > 0 ? (
+                        job.techTags.slice(0, 4).map((tag) => (
+                          <span
+                            key={`${job.id}-${tag}`}
+                            className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-slate-400 dark:text-slate-500">暂无技术标签</span>
+                      )}
+                      {job.techTags.length > 4 && (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                          +{job.techTags.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          {loadingDetail && (
+            <div className="flex min-h-[520px] items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+            </div>
+          )}
+
+          {!loadingDetail && detailError && (
+            <div className="flex min-h-[520px] items-center justify-center">
+              <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-500/70 dark:bg-red-900/30">
+                <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-500" />
+                <p className="text-sm text-red-700 dark:text-red-200">{detailError}</p>
+                {selectedJobId && (
+                  <button
+                    type="button"
+                    onClick={() => void loadJobDetail(selectedJobId)}
+                    className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-medium text-red-600 dark:bg-slate-800 dark:text-red-300"
+                  >
+                    重试加载详情
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!loadingDetail && !detailError && !selectedJob && (
+            <div className="flex min-h-[520px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+              <Briefcase className="mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">请选择一个职位</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                左侧选择职位后，这里会展示详情、投递进度和简历匹配入口。
+              </p>
+            </div>
+          )}
+
+          {!loadingDetail && !detailError && selectedJob && (
+            <div className="space-y-6">
+              <div className="flex flex-col gap-4 border-b border-slate-100 pb-6 dark:border-slate-700 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${getStatusBadgeClass(selectedJob.applicationStatus)}`}
+                    >
+                      {jobStatusLabelMap[selectedJob.applicationStatus]}
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      创建于 {formatDateTime(selectedJob.createdAt)}
+                    </span>
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                    {selectedJob.title}
+                  </h2>
+                  <p className="mt-2 flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <Building2 className="h-4 w-4" />
+                    {selectedJob.company}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={openEditDialog}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMatchOpen(true)}
+                    className="flex items-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+                  >
+                    <Target className="h-4 w-4" />
+                    简历匹配
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(selectedJob)}
+                    className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-300"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    删除
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <DetailCard
+                  icon={MapPin}
+                  label="工作地点"
+                  value={selectedJob.location || '未填写'}
+                />
+                <DetailCard
+                  icon={Sparkles}
+                  label="薪资范围"
+                  value={formatSalaryRange(selectedJob.salaryMin, selectedJob.salaryMax)}
+                />
+                <DetailCard
+                  icon={CalendarDays}
+                  label="最近更新"
+                  value={formatDateTime(selectedJob.updatedAt)}
+                />
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  职位描述
+                </h3>
+                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
+                  {selectedJob.description}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  技术标签
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedJob.techTags.length > 0 ? (
+                    selectedJob.techTags.map((tag) => (
+                      <span
+                        key={`${selectedJob.id}-${tag}`}
+                        className="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-300"
+                      >
+                        {tag}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-slate-400 dark:text-slate-500">
+                      暂无技术标签，后端会根据职位描述自动提取。
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  跟进备注
+                </h3>
+                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
+                  {selectedJob.notes || '暂无备注，可用于记录投递渠道、面试进度和 follow-up 计划。'}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <JobFormDialog
+        open={formOpen}
+        mode={formMode}
+        initialJob={formInitialJob}
+        loading={submitting}
+        onCancel={() => setFormOpen(false)}
+        onSubmit={(data) => void handleSubmit(data)}
+      />
+
+      <JobMatchDialog
+        open={matchOpen}
+        job={
+          selectedJobSummary
+            ? {
+                id: selectedJobSummary.id,
+                title: selectedJobSummary.title,
+                company: selectedJobSummary.company,
+              }
+            : null
+        }
+        onClose={() => setMatchOpen(false)}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteTarget !== null}
+        item={deleteTarget}
+        itemType="职位"
+        loading={deleting}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setDeleteTarget(null)}
+        customMessage={
+          deleteTarget ? (
+            <>
+              <p className="mb-2">
+                确定要删除职位 <strong>“{deleteTarget.title}”</strong> 吗？
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                公司：{deleteTarget.company}。删除后该职位的匹配记录入口会一并失效，且无法恢复。
+              </p>
+            </>
+          ) : undefined
+        }
+      />
+    </div>
+  );
+}
+
+interface SummaryCardProps {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  hint: string;
+  colorClass: string;
+}
+
+function SummaryCard({ icon: Icon, label, value, hint, colorClass }: SummaryCardProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+    >
+      <div className="flex items-start gap-4">
+        <div className={`rounded-xl p-3 text-white ${colorClass}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{hint}</p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+interface DetailCardProps {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}
+
+function DetailCard({ icon: Icon, label, value }: DetailCardProps) {
+  return (
+    <div className="rounded-2xl border border-slate-100 p-4 dark:border-slate-700">
+      <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+      </div>
+      <p className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{value}</p>
+    </div>
+  );
+}

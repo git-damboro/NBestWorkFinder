@@ -15,6 +15,7 @@ const InterviewHistoryPage = lazy(() => import('./pages/InterviewHistoryPage'));
 const KnowledgeBaseQueryPage = lazy(() => import('./pages/KnowledgeBaseQueryPage'));
 const KnowledgeBaseUploadPage = lazy(() => import('./pages/KnowledgeBaseUploadPage'));
 const KnowledgeBaseManagePage = lazy(() => import('./pages/KnowledgeBaseManagePage'));
+const JobManagePage = lazy(() => import('./pages/JobManagePage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 
@@ -159,6 +160,7 @@ function App() {
               <Route path="history/:resumeId" element={<ResumeDetailWrapper />} />
               <Route path="interviews" element={<InterviewHistoryWrapper />} />
               <Route path="interview/:resumeId" element={<InterviewWrapper />} />
+              <Route path="jobs" element={<JobManagePage />} />
               <Route path="knowledgebase" element={<KnowledgeBaseManagePageWrapper />} />
               <Route path="knowledgebase/upload" element={<KnowledgeBaseUploadPageWrapper />} />
               <Route path="knowledgebase/chat" element={<KnowledgeBaseQueryPageWrapper />} />
