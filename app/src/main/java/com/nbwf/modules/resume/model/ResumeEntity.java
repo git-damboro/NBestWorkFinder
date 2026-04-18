@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "resumes", indexes = {
-    @Index(name = "idx_resume_hash", columnList = "fileHash", unique = true)
+    @Index(name = "idx_resume_user_uploaded_at", columnList = "user_id, uploaded_at"),
+    @Index(name = "uk_resume_user_file_hash", columnList = "user_id, file_hash", unique = true)
 })
 public class ResumeEntity {
     
@@ -23,8 +24,8 @@ public class ResumeEntity {
     @Column(name = "user_id")
     private Long userId;
 
-    // 文件内容的SHA-256哈希值，用于去重
-    @Column(nullable = false, unique = true, length = 64)
+    // 文件内容的SHA-256哈希值，用于当前用户内去重
+    @Column(name = "file_hash", nullable = false, length = 64)
     private String fileHash;
     
     // 原始文件名
@@ -50,7 +51,7 @@ public class ResumeEntity {
     private String resumeText;
     
     // 上传时间
-    @Column(nullable = false)
+    @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime uploadedAt;
     
     // 最后访问时间

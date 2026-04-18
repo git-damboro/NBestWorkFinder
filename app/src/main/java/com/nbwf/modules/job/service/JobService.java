@@ -85,7 +85,7 @@ public class JobService {
 
     public JobMatchDTO match(Long jobId, Long resumeId, Long userId) {
         JobEntity job = findOrThrow(jobId, userId);
-        ResumeEntity resume = resumeRepository.findById(resumeId)
+        ResumeEntity resume = resumeRepository.findByIdAndUserId(resumeId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND));
 
         if (resume.getResumeText() == null || resume.getResumeText().isBlank()) {

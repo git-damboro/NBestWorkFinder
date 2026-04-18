@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,8 +45,9 @@ public class ResumeController {
     @PostMapping(value = "/api/resumes/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 5)
     @RateLimit(dimension = RateLimit.Dimension.IP, count = 5)
-    public Result<Map<String, Object>> uploadAndAnalyze(@RequestParam("file") MultipartFile file) {
-        Map<String, Object> result = uploadService.uploadAndAnalyze(file);
+    public Result<Map<String, Object>> uploadAndAnalyze(@RequestParam("file") MultipartFile file,
+                                                        @AuthenticationPrincipal Long userId) {
+        Map<String, Object> result = uploadService.uploadAndAnalyze(file, userId);
         boolean isDuplicate = (Boolean) result.get("duplicate");
         if (isDuplicate) {
             return Result.success("检测到相同简历，已返回历史分析结果", result);
@@ -57,8 +59,8 @@ public class ResumeController {
      * 获取所有简历列表
      */
     @GetMapping("/api/resumes")
-    public Result<List<ResumeListItemDTO>> getAllResumes() {
-        List<ResumeListItemDTO> resumes = historyService.getAllResumes();
+    public Result<List<ResumeListItemDTO>> getAllResumes(@AuthenticationPrincipal Long userId) {
+        List<ResumeListItemDTO> resumes = historyService.getAllResumes(userId);
         return Result.success(resumes);
     }
 
@@ -66,8 +68,9 @@ public class ResumeController {
      * 获取简历详情（包含分析历史）
      */
     @GetMapping("/api/resumes/{id}/detail")
-    public Result<ResumeDetailDTO> getResumeDetail(@PathVariable Long id) {
-        ResumeDetailDTO detail = historyService.getResumeDetail(id);
+    public Result<ResumeDetailDTO> getResumeDetail(@PathVariable Long id,
+                                                   @AuthenticationPrincipal Long userId) {
+        ResumeDetailDTO detail = historyService.getResumeDetail(id, userId);
         return Result.success(detail);
     }
 
@@ -75,19 +78,15 @@ public class ResumeController {
      * 导出简历分析报告为PDF
      */
     @GetMapping("/api/resumes/{id}/export")
-    public ResponseEntity<byte[]> exportAnalysisPdf(@PathVariable Long id) {
-        try {
-            var result = historyService.exportAnalysisPdf(id);
-            String filename = URLEncoder.encode(result.filename(), StandardCharsets.UTF_8);
+    public ResponseEntity<byte[]> exportAnalysisPdf(@PathVariable Long id,
+                                                    @AuthenticationPrincipal Long userId) {
+        var result = historyService.exportAnalysisPdf(id, userId);
+        String filename = URLEncoder.encode(result.filename(), StandardCharsets.UTF_8);
 
-            return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(result.pdfBytes());
-        } catch (Exception e) {
-            log.error("导出PDF失败: resumeId={}", id, e);
-            return ResponseEntity.internalServerError().build();
-        }
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
+            .contentType(MediaType.APPLICATION_PDF)
+            .body(result.pdfBytes());
     }
 
     /**
@@ -97,8 +96,9 @@ public class ResumeController {
      * @return 删除结果
      */
     @DeleteMapping("/api/resumes/{id}")
-    public Result<Void> deleteResume(@PathVariable Long id) {
-        deleteService.deleteResume(id);
+    public Result<Void> deleteResume(@PathVariable Long id,
+                                     @AuthenticationPrincipal Long userId) {
+        deleteService.deleteResume(id, userId);
         return Result.success(null);
     }
 
@@ -112,8 +112,9 @@ public class ResumeController {
     @PostMapping("/api/resumes/{id}/reanalyze")
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 2)
     @RateLimit(dimension = RateLimit.Dimension.IP, count = 2)
-    public Result<Void> reanalyze(@PathVariable Long id) {
-        uploadService.reanalyze(id);
+    public Result<Void> reanalyze(@PathVariable Long id,
+                                  @AuthenticationPrincipal Long userId) {
+        uploadService.reanalyze(id, userId);
         return Result.success(null);
     }
 

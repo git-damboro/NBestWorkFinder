@@ -24,15 +24,16 @@ public class ResumeDeleteService {
     
     /**
      * 删除简历
-     * 
+     *
      * @param id 简历ID
+     * @param userId 当前登录用户ID
      * @throws com.nbwf.common.exception.BusinessException 如果简历不存在
      */
-    public void deleteResume(Long id) {
+    public void deleteResume(Long id, Long userId) {
         log.info("收到删除简历请求: id={}", id);
         
-        // 获取简历信息（用于删除存储文件）
-        ResumeEntity resume = persistenceService.findById(id)
+        // 先在当前用户范围内取回简历，避免跨用户删除
+        ResumeEntity resume = persistenceService.findById(id, userId)
             .orElseThrow(() -> new BusinessException(
                 ErrorCode.RESUME_NOT_FOUND));
         
@@ -47,9 +48,8 @@ public class ResumeDeleteService {
         interviewPersistenceService.deleteSessionsByResumeId(id);
         
         // 3. 删除数据库记录（包括分析记录）
-        persistenceService.deleteResume(id);
+        persistenceService.deleteResume(id, userId);
         
         log.info("简历删除完成: id={}", id);
     }
 }
-
