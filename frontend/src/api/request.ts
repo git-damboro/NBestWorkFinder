@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { clearAuthSession, getAccessToken } from '../auth/auth-storage';
 
 /**
  * 后端统一响应结构
@@ -14,6 +15,19 @@ const baseURL = import.meta.env.PROD ? '' : 'http://localhost:8080';
 const instance: AxiosInstance = axios.create({
   baseURL,
   timeout: 60000,
+});
+
+/**
+ * 请求拦截器
+ *
+ * 登录后所有业务请求都自动携带 Bearer Token，避免页面层重复处理认证头。
+ */
+instance.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 /**
@@ -45,6 +59,16 @@ instance.interceptors.response.use(
     // 有响应的情况：后端返回了结果（即使是错误）
     if (error.response) {
       const { data } = error.response;
+
+      // 访问令牌失效或缺失时，立即清空本地登录态并回到登录页
+      if (error.response.status === 401) {
+        clearAuthSession();
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        return Promise.reject(new Error('登录状态已失效，请重新登录'));
+      }
+
       // 尝试解析 Result 格式
       if (data && typeof data === 'object' && 'code' in data && 'message' in data) {
         const result = data as Result;
