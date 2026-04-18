@@ -3,6 +3,8 @@ import Layout from './components/Layout';
 import { useEffect, useState, Suspense, lazy } from 'react';
 import { historyApi } from './api/history';
 import type { UploadKnowledgeBaseResponse } from './api/knowledgebase';
+import ProtectedRoute from './auth/ProtectedRoute';
+import PublicRoute from './auth/PublicRoute';
 
 // Lazy load components
 const UploadPage = lazy(() => import('./pages/UploadPage'));
@@ -13,6 +15,8 @@ const InterviewHistoryPage = lazy(() => import('./pages/InterviewHistoryPage'));
 const KnowledgeBaseQueryPage = lazy(() => import('./pages/KnowledgeBaseQueryPage'));
 const KnowledgeBaseUploadPage = lazy(() => import('./pages/KnowledgeBaseUploadPage'));
 const KnowledgeBaseManagePage = lazy(() => import('./pages/KnowledgeBaseManagePage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 
 // Loading component
 const Loading = () => (
@@ -140,34 +144,28 @@ function App() {
     <BrowserRouter>
       <Suspense fallback={<Loading />}>
         <Routes>
-          <Route path="/" element={<Layout />}>
-            {/* 默认重定向到上传页面 */}
-            <Route index element={<Navigate to="/upload" replace />} />
-
-            {/* 上传页面 */}
-            <Route path="upload" element={<UploadPageWrapper />} />
-
-            {/* 历史记录列表（简历库） */}
-            <Route path="history" element={<HistoryListWrapper />} />
-
-            {/* 简历详情 */}
-            <Route path="history/:resumeId" element={<ResumeDetailWrapper />} />
-
-            {/* 面试记录列表 */}
-            <Route path="interviews" element={<InterviewHistoryWrapper />} />
-
-            {/* 模拟面试 */}
-            <Route path="interview/:resumeId" element={<InterviewWrapper />} />
-
-            {/* 知识库管理 */}
-            <Route path="knowledgebase" element={<KnowledgeBaseManagePageWrapper />} />
-
-            {/* 知识库上传 */}
-            <Route path="knowledgebase/upload" element={<KnowledgeBaseUploadPageWrapper />} />
-
-            {/* 问答助手（知识库聊天） */}
-            <Route path="knowledgebase/chat" element={<KnowledgeBaseQueryPageWrapper />} />
+          {/* 公开路由：未登录用户才能访问登录和注册页 */}
+          <Route element={<PublicRoute />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
           </Route>
+
+          {/* 业务路由：统一要求登录后访问 */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Navigate to="/upload" replace />} />
+              <Route path="upload" element={<UploadPageWrapper />} />
+              <Route path="history" element={<HistoryListWrapper />} />
+              <Route path="history/:resumeId" element={<ResumeDetailWrapper />} />
+              <Route path="interviews" element={<InterviewHistoryWrapper />} />
+              <Route path="interview/:resumeId" element={<InterviewWrapper />} />
+              <Route path="knowledgebase" element={<KnowledgeBaseManagePageWrapper />} />
+              <Route path="knowledgebase/upload" element={<KnowledgeBaseUploadPageWrapper />} />
+              <Route path="knowledgebase/chat" element={<KnowledgeBaseQueryPageWrapper />} />
+            </Route>
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
