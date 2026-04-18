@@ -1,7 +1,8 @@
 import {Link, Outlet, useLocation} from 'react-router-dom';
 import {motion} from 'framer-motion';
-import {ChevronRight, Database, FileStack, MessageSquare, Moon, Sparkles, Sun, Upload, Users,} from 'lucide-react';
+import {ChevronRight, Database, FileStack, LogOut, MessageSquare, Moon, Sparkles, Sun, Upload, Users,} from 'lucide-react';
 import {useTheme} from '../hooks/useTheme';
+import { useAuth } from '../auth/AuthContext';
 
 interface NavItem {
   id: string;
@@ -21,6 +22,7 @@ export default function Layout() {
   const location = useLocation();
   const currentPath = location.pathname;
     const {theme, toggleTheme} = useTheme();
+    const { user, logout } = useAuth();
 
   // 按业务模块组织的导航项
   const navGroups: NavGroup[] = [
@@ -150,12 +152,30 @@ export default function Layout() {
         </nav>
 
         {/* 底部信息 */}
-              <div className="p-4 border-t border-slate-100 dark:border-slate-700">
+              <div className="p-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
                   <div
                       className="px-3 py-2 bg-gradient-to-r from-primary-50 to-indigo-50 dark:from-primary-900/30 dark:to-slate-800 rounded-xl">
                       <p className="text-xs text-primary-600 dark:text-primary-400 font-medium">AI 面试助手 v1.0</p>
                       <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Powered by AI</p>
           </div>
+
+                  {user && (
+                      <div
+                          className="px-3 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                          <p className="text-xs text-slate-400 dark:text-slate-500">当前用户</p>
+                          <p className="text-sm text-slate-700 dark:text-slate-200 font-medium truncate mt-1">
+                              {user.email}
+                          </p>
+                          <button
+                              type="button"
+                              onClick={() => void logout()}
+                              className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+                          >
+                              <LogOut className="w-4 h-4"/>
+                              <span className="text-sm font-medium">退出登录</span>
+                          </button>
+                      </div>
+                  )}
         </div>
       </aside>
 
