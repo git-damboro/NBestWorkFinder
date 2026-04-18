@@ -23,6 +23,7 @@ public class JobService {
     private final JobTagExtractService tagExtractService;
     private final JobMatchService matchService;
     private final ResumeRepository resumeRepository;
+    private final ResumeJobDraftService resumeJobDraftService;
 
     @Transactional
     public JobDetailDTO create(CreateJobRequest req, Long userId) {
@@ -93,6 +94,21 @@ public class JobService {
         }
 
         return matchService.analyze(resume.getResumeText(), job.getTitle(), job.getDescription());
+    }
+
+    /**
+     * 基于当前用户自己的简历文本生成临时职位草稿。
+     * 草稿只用于前端确认，不新增数据库表。
+     */
+    public List<ResumeJobDraftDTO> generateDraftsFromResume(Long resumeId, Long userId) {
+        ResumeEntity resume = resumeRepository.findByIdAndUserId(resumeId, userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND));
+
+        if (resume.getResumeText() == null || resume.getResumeText().isBlank()) {
+            throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED, "当前简历内容为空，无法生成职位草稿");
+        }
+
+        return resumeJobDraftService.generateDrafts(resume.getResumeText());
     }
 
     private JobEntity findOrThrow(Long id, Long userId) {

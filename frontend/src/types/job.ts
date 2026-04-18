@@ -40,6 +40,15 @@ export interface JobMatchResult {
   summary: string;
 }
 
+export interface ResumeJobDraft {
+  title: string;
+  summary: string;
+  reason: string;
+  techTags: string[];
+  defaultDescription: string;
+  defaultNotes: string;
+}
+
 export interface CreateJobForm {
   title: string;
   company: string;

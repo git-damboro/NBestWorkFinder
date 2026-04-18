@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
@@ -135,6 +135,7 @@ function matchKeyword(job: JobListItem, keyword: string) {
 }
 
 export default function JobManagePage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
@@ -161,10 +162,22 @@ export default function JobManagePage() {
   // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
   const selectedJobIdRef = useRef<number | null>(null);
   const detailRequestIdRef = useRef(0);
+  const routeSelectedJobId = (location.state as { selectedJobId?: number } | null)?.selectedJobId ?? null;
 
   useEffect(() => {
     selectedJobIdRef.current = selectedJobId;
   }, [selectedJobId]);
+
+  useEffect(() => {
+    if (routeSelectedJobId === null) {
+      return;
+    }
+
+    // 从简历详情页保存职位草稿后，优先聚焦刚创建的职位。
+    selectedJobIdRef.current = routeSelectedJobId;
+    setSelectedJobId(routeSelectedJobId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [routeSelectedJobId, navigate, location.pathname]);
 
   const loadJobDetail = useCallback(async (jobId: number) => {
     const requestId = ++detailRequestIdRef.current;

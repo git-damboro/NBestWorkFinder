@@ -64,4 +64,11 @@ public class JobController {
                                       @AuthenticationPrincipal Long userId) {
         return Result.success(jobService.match(id, resumeId, userId));
     }
+
+    @Operation(summary = "根据简历生成职位草稿")
+    @PostMapping("/drafts/from-resume/{resumeId}")
+    public Result<List<ResumeJobDraftDTO>> generateDraftsFromResume(@PathVariable Long resumeId,
+                                                                    @AuthenticationPrincipal Long userId) {
+        return Result.success(jobService.generateDraftsFromResume(resumeId, userId));
+    }
 }

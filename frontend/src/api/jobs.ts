@@ -6,6 +6,7 @@ import type {
   JobListItem,
   JobMatchResult,
   MatchJobForm,
+  ResumeJobDraft,
   UpdateJobForm,
 } from '../types/job';
 
@@ -34,6 +35,13 @@ export const jobApi = {
   },
 
   /**
+   * 根据简历生成职位草稿
+   */
+  async generateDraftsFromResume(resumeId: number): Promise<ResumeJobDraft[]> {
+    return request.post<ResumeJobDraft[]>(`/api/jobs/drafts/from-resume/${resumeId}`);
+  },
+
+  /**
    * 更新职位
    */
   async updateJob(id: number, data: UpdateJobForm): Promise<JobDetail> {
@@ -57,4 +65,3 @@ export const jobApi = {
     });
   },
 };
-

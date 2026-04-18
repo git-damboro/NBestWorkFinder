@@ -1,12 +1,16 @@
 import {useCallback, useEffect, useState} from 'react';
-import {useLocation} from 'react-router-dom';
+import {useLocation, useNavigate} from 'react-router-dom';
 import {AnimatePresence, motion} from 'framer-motion';
 import {historyApi, InterviewDetail, ResumeDetail} from '../api/history';
+import {jobApi} from '../api';
+import {getErrorMessage} from '../api/request';
 import AnalysisPanel from '../components/AnalysisPanel';
 import InterviewPanel from '../components/InterviewPanel';
 import InterviewDetailPanel from '../components/InterviewDetailPanel';
+import ResumeJobDraftDialog from '../components/ResumeJobDraftDialog';
+import type {ResumeJobDraft} from '../types/job';
 import {formatDateOnly} from '../utils/date';
-import {CheckSquare, ChevronLeft, Clock, Download, MessageSquare, Mic} from 'lucide-react';
+import {BriefcaseBusiness, CheckSquare, ChevronLeft, Clock, Download, MessageSquare, Mic} from 'lucide-react';
 
 interface ResumeDetailPageProps {
   resumeId: number;
@@ -19,6 +23,7 @@ type DetailViewType = 'list' | 'interviewDetail';
 
 export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }: ResumeDetailPageProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [resume, setResume] = useState<ResumeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('analysis');
@@ -28,6 +33,11 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
   const [selectedInterview, setSelectedInterview] = useState<InterviewDetail | null>(null);
   const [loadingInterview, setLoadingInterview] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [jobDraftDialogOpen, setJobDraftDialogOpen] = useState(false);
+  const [jobDrafts, setJobDrafts] = useState<ResumeJobDraft[]>([]);
+  const [generatingJobDrafts, setGeneratingJobDrafts] = useState(false);
+  const [savingJobDraft, setSavingJobDraft] = useState(false);
+  const [jobDraftError, setJobDraftError] = useState<string | null>(null);
 
   // 静默加载数据（用于轮询）
   const loadResumeDetailSilent = useCallback(async () => {
@@ -165,6 +175,51 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
     setSelectedInterview(null);
   };
 
+  const handleGenerateJobDrafts = async () => {
+    setGeneratingJobDrafts(true);
+    setJobDraftError(null);
+
+    try {
+      const drafts = await jobApi.generateDraftsFromResume(resumeId);
+      setJobDrafts(drafts);
+      if (drafts.length === 0) {
+        setJobDraftError('当前简历暂未生成可用的职位草稿，请补充更完整的简历内容后重试。');
+      }
+      setJobDraftDialogOpen(true);
+    } catch (error) {
+      setJobDrafts([]);
+      setJobDraftError(getErrorMessage(error));
+      setJobDraftDialogOpen(true);
+    } finally {
+      setGeneratingJobDrafts(false);
+    }
+  };
+
+  const handleSaveJobDraft = async (draft: ResumeJobDraft) => {
+    setSavingJobDraft(true);
+    setJobDraftError(null);
+
+    try {
+      const createdJob = await jobApi.createJob({
+        title: draft.title,
+        company: '待补充',
+        description: draft.defaultDescription,
+        notes: draft.defaultNotes,
+      });
+
+      setJobDraftDialogOpen(false);
+      navigate('/jobs', {
+        state: {
+          selectedJobId: createdJob.id,
+        },
+      });
+    } catch (error) {
+      setJobDraftError(getErrorMessage(error));
+    } finally {
+      setSavingJobDraft(false);
+    }
+  };
+
   const handleDeleteInterview = async (sessionId: string) => {
     // 删除后重新加载简历详情
     await loadResumeDetail();
@@ -270,15 +325,27 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
             </motion.button>
           )}
           {detailView !== 'interviewDetail' && (
-            <motion.button
-              onClick={() => onStartInterview(resume.resumeText, resumeId)}
-              className="px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-medium shadow-lg shadow-primary-500/30 hover:shadow-xl transition-all flex items-center gap-2"
-              whileHover={{ scale: 1.02, y: -1 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Mic className="w-4 h-4" />
-              开始模拟面试
-            </motion.button>
+            <>
+              <motion.button
+                onClick={handleGenerateJobDrafts}
+                disabled={generatingJobDrafts || !resume.resumeText?.trim()}
+                className="px-5 py-2.5 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-50 transition-all disabled:opacity-50 flex items-center gap-2"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <BriefcaseBusiness className="w-4 h-4" />
+                {generatingJobDrafts ? '生成中...' : '生成职位草稿'}
+              </motion.button>
+              <motion.button
+                onClick={() => onStartInterview(resume.resumeText, resumeId)}
+                className="px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-medium shadow-lg shadow-primary-500/30 hover:shadow-xl transition-all flex items-center gap-2"
+                whileHover={{ scale: 1.02, y: -1 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Mic className="w-4 h-4" />
+                开始模拟面试
+              </motion.button>
+            </>
           )}
         </div>
       </div>
@@ -355,6 +422,20 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
           </AnimatePresence>
         )}
       </div>
+
+      <ResumeJobDraftDialog
+        open={jobDraftDialogOpen}
+        drafts={jobDrafts}
+        loading={generatingJobDrafts}
+        saving={savingJobDraft}
+        error={jobDraftError}
+        onClose={() => {
+          setJobDraftDialogOpen(false);
+          setJobDraftError(null);
+        }}
+        onRetry={() => void handleGenerateJobDrafts()}
+        onSelect={(draft) => void handleSaveJobDraft(draft)}
+      />
     </motion.div>
   );
 }
