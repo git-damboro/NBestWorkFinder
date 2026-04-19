@@ -96,6 +96,14 @@ public class AiGenerationTaskService {
     }
 
     /**
+     * 仅供后台消费者读取完整任务实体，避免 requestJson 对外暴露。
+     */
+    @Transactional(readOnly = true)
+    public AiGenerationTaskEntity getTaskEntity(String taskId, Long userId) {
+        return findTaskOrThrow(taskId, userId);
+    }
+
+    /**
      * 查询指定来源最近一条任务；若不存在则返回 null，便于前端静默恢复。
      */
     @Transactional(readOnly = true)

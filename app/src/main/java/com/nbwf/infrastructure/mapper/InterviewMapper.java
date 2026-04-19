@@ -113,6 +113,9 @@ public interface InterviewMapper {
         java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
         map.put("id", session.getId());
         map.put("sessionId", session.getSessionId());
+        map.put("targetJobId", session.getTargetJobId());
+        map.put("targetJobTitle", session.getTargetJobTitle());
+        map.put("targetJobCompany", session.getTargetJobCompany());
         map.put("totalQuestions", session.getTotalQuestions());
         map.put("status", session.getStatus().toString());
         map.put("evaluateStatus", session.getEvaluateStatus() != null ? session.getEvaluateStatus().name() : null);

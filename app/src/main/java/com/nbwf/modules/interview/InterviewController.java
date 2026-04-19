@@ -2,6 +2,7 @@ package com.nbwf.modules.interview;
 
 import com.nbwf.common.annotation.RateLimit;
 import com.nbwf.common.result.Result;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskDTO;
 import com.nbwf.modules.interview.model.*;
 import com.nbwf.modules.interview.service.InterviewHistoryService;
 import com.nbwf.modules.interview.service.InterviewPersistenceService;
@@ -44,6 +45,18 @@ public class InterviewController {
         log.info("创建面试会话，题目数量: {}", request.questionCount());
         InterviewSessionDTO session = sessionService.createSession(request, userId);
         return Result.success(session);
+    }
+
+    /**
+     * 创建面试题后台任务
+     */
+    @PostMapping("/api/interview/session-tasks")
+    @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 5)
+    @RateLimit(dimension = RateLimit.Dimension.IP, count = 5)
+    public Result<AiGenerationTaskDTO> createSessionTask(@RequestBody CreateInterviewRequest request,
+                                                         @AuthenticationPrincipal Long userId) {
+        log.info("创建面试题后台任务，题目数量: {}", request.questionCount());
+        return Result.success(sessionService.createSessionTask(request, userId));
     }
     
     /**

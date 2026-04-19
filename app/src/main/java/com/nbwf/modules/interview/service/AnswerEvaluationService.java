@@ -464,7 +464,10 @@ public class AnswerEvaluationService {
             overallFeedback,
             strengths != null ? strengths : List.of(),
             improvements != null ? improvements : List.of(),
-            referenceAnswers
+            referenceAnswers,
+            null,
+            null,
+            null
         );
     }
 }

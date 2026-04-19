@@ -1,8 +1,12 @@
 package com.nbwf.modules.aigeneration.listener;
 
 import com.nbwf.infrastructure.redis.RedisService;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskEntity;
 import com.nbwf.modules.aigeneration.model.AiGenerationTaskType;
 import com.nbwf.modules.aigeneration.service.AiGenerationTaskService;
+import com.nbwf.modules.interview.model.CreateInterviewRequest;
+import com.nbwf.modules.interview.model.InterviewSessionDTO;
+import com.nbwf.modules.interview.service.InterviewSessionService;
 import com.nbwf.modules.job.model.ResumeJobDraftDTO;
 import com.nbwf.modules.job.service.ResumeJobDraftService;
 import com.nbwf.modules.resume.model.ResumeEntity;
@@ -37,6 +41,9 @@ class AiGenerationStreamConsumerTest {
     @Mock
     private ResumeJobDraftService resumeJobDraftService;
 
+    @Mock
+    private InterviewSessionService interviewSessionService;
+
     @Test
     void resumeJobDraftTaskShouldGenerateDraftsAndWriteResultJson() {
         AiGenerationStreamConsumer consumer = new AiGenerationStreamConsumer(
@@ -44,6 +51,7 @@ class AiGenerationStreamConsumerTest {
             aiGenerationTaskService,
             resumeRepository,
             resumeJobDraftService,
+            interviewSessionService,
             new ObjectMapper()
         );
         AiGenerationStreamConsumer.AiGenerationPayload payload =
@@ -90,6 +98,7 @@ class AiGenerationStreamConsumerTest {
             aiGenerationTaskService,
             resumeRepository,
             resumeJobDraftService,
+            interviewSessionService,
             new ObjectMapper()
         );
         AiGenerationStreamConsumer.AiGenerationPayload payload =
@@ -104,5 +113,61 @@ class AiGenerationStreamConsumerTest {
         consumer.markFailed(payload, "失败");
 
         verify(aiGenerationTaskService).markFailed("agt_draft", 7L, "失败");
+    }
+
+    @Test
+    void interviewSessionCreateTaskShouldCreateSessionAndWriteSessionId() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        AiGenerationStreamConsumer consumer = new AiGenerationStreamConsumer(
+            redisService,
+            aiGenerationTaskService,
+            resumeRepository,
+            resumeJobDraftService,
+            interviewSessionService,
+            objectMapper
+        );
+        AiGenerationStreamConsumer.AiGenerationPayload payload =
+            new AiGenerationStreamConsumer.AiGenerationPayload(
+                "agt_interview",
+                7L,
+                AiGenerationTaskType.INTERVIEW_SESSION_CREATE,
+                21L,
+                31L
+            );
+        CreateInterviewRequest request = new CreateInterviewRequest(
+            "Java / Spring Boot / Redis",
+            5,
+            21L,
+            31L,
+            true
+        );
+        AiGenerationTaskEntity task = new AiGenerationTaskEntity();
+        task.setTaskId("agt_interview");
+        task.setUserId(7L);
+        task.setType(AiGenerationTaskType.INTERVIEW_SESSION_CREATE);
+        task.setSourceId(21L);
+        task.setTargetId(31L);
+        task.setRequestJson(objectMapper.writeValueAsString(request));
+
+        when(aiGenerationTaskService.getTaskEntity("agt_interview", 7L)).thenReturn(task);
+        when(interviewSessionService.createSession(request, 7L)).thenReturn(new InterviewSessionDTO(
+            "session-async",
+            "Java / Spring Boot / Redis",
+            0,
+            0,
+            List.of(),
+            InterviewSessionDTO.SessionStatus.CREATED,
+            31L,
+            "Java 后端开发工程师",
+            "示例科技"
+        ));
+
+        consumer.processBusiness(payload);
+        consumer.markCompleted(payload);
+
+        ArgumentCaptor<String> resultCaptor = ArgumentCaptor.forClass(String.class);
+        verify(interviewSessionService).createSession(request, 7L);
+        verify(aiGenerationTaskService).markCompleted(eq("agt_interview"), eq(7L), resultCaptor.capture());
+        assertTrue(resultCaptor.getValue().contains("\"sessionId\":\"session-async\""));
     }
 }

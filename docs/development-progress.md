@@ -1,7 +1,7 @@
 # 开发进度文档
 
-> 本文档用于持续记录 `NBestWorkFinder` 的当前开发阶段、模块完成情况、最近验证结果、后续优先级与待开发事项。  
-> 约定：每完成一个模块的小功能，都同步更新本文档后再提交代码。
+> 本文档用于持续记录 `NBestWorkFinder` 当前开发阶段、模块完成度、最近验证结果、下一步优先级与待办事项。  
+> 约定：每完成一个模块的小功能，都同步更新本文档，再进行提交与推送。
 
 ## 1. 当前阶段
 
@@ -9,9 +9,9 @@
 |---|---|
 | 项目名称 | `NBestWorkFinder` |
 | 当前日期 | `2026-04-19` |
-| 当前阶段 | 用户认证闭环已完成，核心业务进入“简历 → 职位 → 面试”的连续使用链路完善阶段 |
-| 本轮重点 | 将 AI 生成型能力改造成后台任务，解决“切页后任务丢失、回来找不到结果”的体验问题 |
-| 当前主线 | 完成“职位草稿后台生成 + 面试题后台生成 + 自动恢复最近任务 + 面试目标职位快照展示” |
+| 当前阶段 | 用户认证闭环已完成，核心业务进入“简历 → 职位 → 面试 → 记录/报告”的链路完善阶段 |
+| 本轮重点 | 将 AI 长耗时能力改造成后台任务，解决“切页后任务中断、回到页面后找不到结果”的体验问题 |
+| 当前主线 | 已完成“职位草稿后台生成 + 面试题后台生成 + 页面自动恢复最近任务 + 面试目标职位快照持久化” |
 
 ## 2. 模块进度总览
 
@@ -19,12 +19,12 @@
 |---|---|---|
 | `user` | 已完成 | 注册、登录、刷新令牌、退出登录、前端登录态与路由守卫已完成 |
 | `resume` | 已完成 / 已隔离 | 简历上传、解析、分析、历史、详情、删除、导出、重分析已按 `userId` 隔离 |
-| `job` | 已完成工作台主链路 | 已支持职位工作台、职位详情、职位编辑、简历匹配、根据简历生成职位草稿并保存到工作台 |
-| `interview` | 已完成主链路 / 已隔离 / 已支持职位定向 | 已支持会话创建、恢复、答题、报告、详情、导出、删除，并支持携带 `jobId` 生成定向题目 |
+| `job` | 已完成主链路 | 已支持职位工作台、职位详情、职位编辑、简历匹配、根据简历生成职位草稿并保存到工作台 |
+| `interview` | 已完成主链路 / 已隔离 / 已支持职位定向 | 已支持会话创建、恢复、答题、报告、详情、导出、删除，并支持携带 `jobId` 生成定向面试题 |
 | `knowledgebase` | 已完成 / 已隔离 | 知识库上传、列表、查询、下载、删除、分类、RAG 会话已接入 `userId` |
-| `frontend` | 进行中 | 已打通“简历到职位”“职位到面试”两条联动链路，当前继续完善后台任务恢复体验 |
-| `ai-generation` | 进行中 | 已完成通用任务基础设施与职位草稿后台任务，待继续接入面试题后台生成 |
-| `security` | 进行中 | 核心资源需登录访问且已完成用户隔离，后续补更多跨用户拒绝场景测试 |
+| `frontend` | 持续完善中 | 简历详情页职位草稿自动恢复完成；面试页后台任务恢复完成 |
+| `ai-generation` | 本轮核心已完成 | 通用任务基础设施、职位草稿后台任务、面试题后台任务、查询与恢复接口均已完成 |
+| `security` | 持续完善中 | 核心资源需登录访问，主要用户数据隔离已完成，后续继续补跨用户拒绝场景测试 |
 
 ## 3. 本轮已完成内容
 
@@ -32,65 +32,60 @@
 |---|---|
 | 设计 | 新增 AI 生成任务后台化设计文档：`docs/superpowers/specs/2026-04-19-ai-generation-task-recovery-design.md` |
 | 计划 | 新增 AI 生成任务实施计划：`docs/superpowers/plans/2026-04-19-ai-generation-task-recovery.md` |
-| `ai-generation` 基础设施 | 新增 `AiGenerationTaskEntity`、`AiGenerationTaskType`、`AiGenerationTaskDTO`、`AiGenerationTaskRepository`、`AiGenerationTaskService`、`AiGenerationTaskController` |
-| 通用常量 | 在 `AsyncTaskStreamConstants` 中补充 AI 生成任务相关字段常量与 Stream 常量 |
-| 测试 | 新增 `AiGenerationTaskServiceTest`，覆盖运行中任务复用、新建 `PENDING` 任务、最近任务查询、`getTask` 用户范围查询、未找到任务抛错 |
-| 质量修正 | 收窄任务 DTO 暴露字段，避免不必要返回 `userId/requestJson`；为任务创建增加业务键本地锁，降低同实例并发重复创建风险 |
-| `job + ai-generation` 后台任务 | 新增 `AiGenerationStreamProducer` / `AiGenerationStreamConsumer`，职位草稿生成已改为 Redis Stream 后台消费并回写任务结果 |
-| `job` 后端接口 | 新增 `/api/jobs/draft-tasks/from-resume/{resumeId}`，保留旧同步接口兼容 |
-| `frontend` 职位草稿恢复 | 新增 AI 生成任务 API 与类型；简历详情页已支持创建职位草稿任务、轮询任务状态、切页回来自动恢复最近任务结果 |
+| Task1：通用基础设施 | 新增 `AiGenerationTaskEntity`、`AiGenerationTaskType`、`AiGenerationTaskDTO`、`AiGenerationTaskRepository`、`AiGenerationTaskService`、`AiGenerationTaskController` |
+| Task2：职位草稿后台任务 | 新增 `AiGenerationStreamProducer` / `AiGenerationStreamConsumer`，职位草稿生成已改为 Redis Stream 后台消费并回写任务结果 |
+| Task2：前端恢复 | `ResumeDetailPage` 已支持创建职位草稿任务、轮询任务状态、切页后自动恢复最近任务结果 |
+| Task3：面试题后台任务 | 新增 `/api/interview/session-tasks`，面试题生成已改为后台任务，消费者完成后回写 `sessionId` |
+| Task3：目标职位快照 | `InterviewSessionEntity` 新增 `targetJobId / targetJobTitle / targetJobCompany`，并在创建会话时持久化 |
+| Task3：面试报告透传 | `InterviewReportDTO`、`InterviewSessionDTO`、`InterviewDetailDTO` 已补充目标职位快照字段 |
+| Task4：前端自动恢复 | `InterviewPage` 已支持创建后台任务、轮询任务状态、返回页面自动恢复最近面试题任务 |
+| 前端体验优化 | 面试配置页已明确提示“后台生成中，可切换页面，回来自动恢复” |
 
-## 4. AI 生成任务方案推进状态
+## 4. AI 生成任务推进状态
 
 | 任务 | 状态 | 说明 |
 |---|---|---|
-| Task1：通用 AI 生成任务基础设施 | 已完成 | 底座、查询接口、基础测试已落地 |
-| Task2：职位草稿后台任务 | 已完成 | 已支持创建任务、后台执行、结果 JSON 回写、前端轮询与自动恢复 |
-| Task3：面试题后台任务 + 目标职位快照 | 待开发 | 将“创建面试会话时同步出题”改为后台任务，并持久化目标职位轻量快照 |
-| Task4：前端自动恢复 + 文档验证 | 部分完成 | 简历详情页职位草稿恢复已完成；面试页恢复待 Task3 接入后继续完成 |
+| Task1：通用 AI 生成任务基础设施 | 已完成 | 底座、查询接口、状态流转、测试均已完成 |
+| Task2：职位草稿后台任务 | 已完成 | 已支持创建任务、后台执行、结果回写、前端轮询与自动恢复 |
+| Task3：面试题后台任务 + 目标职位快照 | 已完成 | 面试题生成改为后台任务，目标职位快照已持久化并向 DTO 输出 |
+| Task4：前端自动恢复 + 文档维护 | 已完成第一轮 | 简历详情页与面试页都已具备任务恢复能力，文档已同步维护 |
 
 ## 5. 最近验证结果
 
 | 时间 | 验证项 | 结果 |
 |---|---|---|
-| `2026-04-19` | `:app:test --tests "com.nbwf.modules.aigeneration.service.AiGenerationTaskServiceTest"` 红灯验证 | 通过，确认缺少 `AiGenerationTaskEntity / Repository / Service` 等实现 |
-| `2026-04-19` | `:app:test --tests "com.nbwf.modules.aigeneration.service.AiGenerationTaskServiceTest"` 绿灯验证 | 通过 |
-| `2026-04-19` | `AiGenerationTaskServiceTest` 质量修正后二次回归 | 通过 |
-| `2026-04-19` | 规格审查（Task1） | 通过 |
-| `2026-04-19` | 代码质量审查（Task1） | 发现 2 个 Important 问题，均已修复并回归 |
-| `2026-04-19` | `:app:test --tests "com.nbwf.modules.job.service.JobServiceDraftsTest" --tests "com.nbwf.modules.aigeneration.listener.AiGenerationStreamConsumerTest" --tests "com.nbwf.modules.aigeneration.service.AiGenerationTaskServiceTest"` | 通过 |
-| `2026-04-19` | `frontend -> npm.cmd run build`（职位草稿后台任务接入后） | 通过；仍有既有 CSS minify 与大 chunk 警告 |
-| `2026-04-19` | `ResumeJobDraftServiceTest` | 通过 |
-| `2026-04-19` | `JobServiceDraftsTest` | 通过 |
-| `2026-04-19` | `frontend -> npm.cmd run build` | 通过 |
+| `2026-04-19` | `:app:test --tests "com.nbwf.modules.interview.service.InterviewSessionServiceTest" --tests "com.nbwf.modules.aigeneration.listener.AiGenerationStreamConsumerTest"` 红灯验证 | 通过，确认缺少面试异步任务接口、目标职位快照字段、消费者接入 |
+| `2026-04-19` | `:app:test --tests "com.nbwf.modules.interview.service.InterviewSessionServiceTest" --tests "com.nbwf.modules.aigeneration.listener.AiGenerationStreamConsumerTest" --tests "com.nbwf.modules.interview.service.InterviewPersistenceServiceTest"` | 通过 |
+| `2026-04-19` | `frontend -> npm.cmd run build`（面试页后台任务改造后） | 通过，仍存在既有 CSS minify warning 与大 chunk warning，不影响本次交付 |
 
 ## 6. 当前优先级
 
 | 优先级 | 模块 | 任务 | 说明 |
 |---:|---|---|---|
-| P0 | `interview + ai-generation` | 把面试题生成切成后台任务 | 当前同步出题耗时长，且切页后体验像任务停止 |
-| P0 | `interview` | 持久化 `targetJobId + targetJobTitle + targetJobCompany` | 让面试记录、详情、报告能明确知道这次面试对应哪个职位 |
-| P1 | `frontend` | 自动恢复最近一次任务 | 简历详情页职位草稿已完成，下一步完成面试页最近面试题生成任务恢复 |
-| P1 | `history / report` | 展示目标职位来源信息 | 完善“职位 → 面试 → 记录/报告”的结果追踪链路 |
-| P2 | `tests` | 补更多跨用户拒绝和链路回归测试 | 在现有隔离基础上继续补稳 |
+| P0 | `history / report` | 前端展示目标职位快照 | 让“职位 → 面试 → 历史/报告”链路在 UI 上完整可见 |
+| P0 | `interview` | 完善任务恢复边界处理 | 补充更多失败提示、重复恢复、异常结果解析场景 |
+| P1 | `job + interview` | 继续打磨职位工作台到面试链路 | 例如从职位卡片直接跳转历史、回看对应面试记录 |
+| P1 | `tests` | 补更多跨用户隔离与恢复回归测试 | 强化权限与链路稳定性 |
+| P2 | `frontend` | 分析大包与 chunk warning | 当前不阻塞交付，后续单独做性能优化 |
 
 ## 7. 下一最小目标
 
 | 项目 | 内容 |
 |---|---|
-| 目标 | 完成 Task3：面试题后台任务 + 目标职位快照 |
-| 具体任务 | 新增面试题生成任务创建接口、后台创建会话、任务结果回写 `sessionId`，并持久化目标职位轻量快照 |
-| 完成标准 | 用户发起面试题生成后，即使切换页面，后台也继续执行；返回面试页后可恢复最近任务，并在记录/详情中看到目标职位 |
+| 目标 | 完成历史页 / 详情页 / 报告页的目标职位信息展示 |
+| 具体任务 | 补充前端 `InterviewHistoryPage`、`InterviewDetailPanel` 等页面的目标职位卡片与跳转入口 |
+| 完成标准 | 用户能在面试历史、详情、报告中明确看到该次面试对应的目标职位 |
 
 ## 8. 已识别风险与注意点
 
 | 类型 | 内容 | 当前结论 |
 |---|---|---|
-| 并发创建 | 同一简历短时间重复点击可能创建重复任务 | Task1 已通过串行化事务降低风险，Task2 接入时还需结合业务层幂等复用继续验证 |
-| DTO 暴露 | 任务 DTO 若返回请求体，可能暴露不必要数据 | Task1 已收窄，只保留前端真正需要的状态与结果字段 |
-| 历史数据兼容 | 后续面试会话新增目标职位快照字段，历史数据为空 | 统一按可选字段处理，避免前端渲染异常 |
-| 前端轮询泄漏 | 页面切换或弹窗关闭时若不清理轮询，容易产生状态污染 | Task2 / Task4 实现时必须统一清理定时器 |
-| 构建告警 | 现有构建仍有 Gradle deprecated 提示 | 当前不影响功能交付，后续单独处理 |
+| 并发创建 | 同一简历短时间重复点击可能创建重复任务 | 当前通过业务键本地锁与运行中任务复用降低风险；多实例场景后续可补数据库约束或分布式锁 |
+| DTO 暴露 | 任务 DTO 若返回请求体可能泄露不必要数据 | 已收窄，前端只拿到状态、结果、错误信息 |
+| 历史数据兼容 | 旧面试会话没有目标职位快照字段 | 新字段统一按可空处理，兼容旧数据 |
+| 轮询清理 | 页面切换或状态切换时若不清理轮询，容易污染状态 | 职位草稿页与面试页都已统一清理定时器 |
+| 构建告警 | 仍存在 Gradle deprecated 提示、前端 CSS/chunk warning | 当前不影响功能交付，后续专项处理 |
+| GitHub 推送 | 远端网络连接此前多次失败 | 本地提交正常，推送时需重试 `git push origin master` |
 
 ## 9. 最近提交记录
 
@@ -99,7 +94,8 @@
 | `d58a425` | docs | 新增 AI 生成任务后台化设计文档 |
 | `d5d40d2` | docs | 新增 AI 生成任务实施计划文档 |
 | `e39ab94` | feat | 通用 AI 生成任务基础设施（Task1） |
-| `待本次提交` | feat | 职位草稿后台任务与简历详情页自动恢复（Task2 / Task4 部分） |
+| `198b7a9` | feat | 职位草稿后台任务与简历详情页自动恢复（Task2） |
+| `当前提交` | feat | 面试题后台任务、目标职位快照、面试页自动恢复（Task3 / Task4） |
 
 ## 10. 文档维护规则
 

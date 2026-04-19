@@ -1,10 +1,12 @@
-import {useEffect, useState} from 'react';
-import {AnimatePresence, motion} from 'framer-motion';
-import {interviewApi} from '../api/interview';
+import { useCallback, useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { aiGenerationTaskApi, getErrorMessage } from '../api';
+import { interviewApi } from '../api/interview';
 import ConfirmDialog from '../components/ConfirmDialog';
-import InterviewConfigPanel from '../components/InterviewConfigPanel';
 import InterviewChatPanel from '../components/InterviewChatPanel';
-import type {InterviewJobTarget, InterviewQuestion, InterviewSession} from '../types/interview';
+import InterviewConfigPanel from '../components/InterviewConfigPanel';
+import type { AiGenerationTask } from '../types/ai-generation-task';
+import type { InterviewJobTarget, InterviewQuestion, InterviewSession } from '../types/interview';
 
 type InterviewStage = 'config' | 'interview';
 
@@ -22,6 +24,58 @@ interface InterviewProps {
   onBack: () => void;
   onInterviewComplete: () => void;
 }
+
+const INTERVIEW_TASK_POLL_INTERVAL_MS = 3000;
+
+const isRestorableSession = (interviewSession: InterviewSession | null | undefined) =>
+  Boolean(
+    interviewSession &&
+      (interviewSession.status === 'CREATED' || interviewSession.status === 'IN_PROGRESS')
+  );
+
+const parseInterviewTaskResult = (task: AiGenerationTask): string | null => {
+  if (!task.resultJson) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(task.resultJson) as { sessionId?: unknown };
+    return typeof parsed.sessionId === 'string' ? parsed.sessionId : null;
+  } catch {
+    return null;
+  }
+};
+
+const buildMessagesFromSession = (interviewSession: InterviewSession): Message[] => {
+  if (interviewSession.questions.length === 0) {
+    return [];
+  }
+
+  const currentIndex = Math.min(
+    interviewSession.currentQuestionIndex,
+    interviewSession.questions.length - 1
+  );
+  const restoredMessages: Message[] = [];
+
+  for (let index = 0; index <= currentIndex; index += 1) {
+    const question = interviewSession.questions[index];
+    restoredMessages.push({
+      type: 'interviewer',
+      content: question.question,
+      category: question.category,
+      questionIndex: question.questionIndex,
+    });
+
+    if (question.userAnswer) {
+      restoredMessages.push({
+        type: 'user',
+        content: question.userAnswer,
+      });
+    }
+  }
+
+  return restoredMessages;
+};
 
 export default function Interview({
   resumeText,
@@ -43,210 +97,294 @@ export default function Interview({
   const [unfinishedSession, setUnfinishedSession] = useState<InterviewSession | null>(null);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [forceCreateNew, setForceCreateNew] = useState(false);
+  const [interviewTaskId, setInterviewTaskId] = useState<string | null>(null);
 
-  // 检查是否有未完成的面试（组件挂载时和resumeId变化时）
-  useEffect(() => {
-    if (resumeId) {
-      checkUnfinishedSession();
+  const restoreSession = useCallback((sessionToRestore: InterviewSession) => {
+    if (!isRestorableSession(sessionToRestore) || sessionToRestore.questions.length === 0) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeId]);
 
-  const checkUnfinishedSession = async () => {
-    if (!resumeId) return;
+    const safeCurrentIndex = Math.min(
+      sessionToRestore.currentQuestionIndex,
+      sessionToRestore.questions.length - 1
+    );
+    const restoredQuestion = sessionToRestore.questions[safeCurrentIndex] ?? null;
+
+    setSession(sessionToRestore);
+    setCurrentQuestion(restoredQuestion);
+    setMessages(buildMessagesFromSession(sessionToRestore));
+    setAnswer(restoredQuestion?.userAnswer ?? '');
+    setStage('interview');
+  }, []);
+
+  const applyInterviewTask = useCallback(
+    async (task: AiGenerationTask) => {
+      setInterviewTaskId(task.taskId);
+
+      if (task.status === 'PENDING' || task.status === 'PROCESSING') {
+        setIsCreating(true);
+        setError('');
+        return;
+      }
+
+      if (task.status === 'FAILED') {
+        setIsCreating(false);
+        setInterviewTaskId(null);
+        setError(task.errorMessage || '面试题生成失败，请重试');
+        return;
+      }
+
+      const sessionId = parseInterviewTaskResult(task);
+      if (!sessionId) {
+        setIsCreating(false);
+        setInterviewTaskId(null);
+        setError('面试题任务结果缺少会话信息，请重新生成');
+        return;
+      }
+
+      try {
+        const generatedSession = await interviewApi.getSession(sessionId);
+        if (!isRestorableSession(generatedSession)) {
+          setIsCreating(false);
+          setInterviewTaskId(null);
+          return;
+        }
+
+        setForceCreateNew(false);
+        setUnfinishedSession(null);
+        setError('');
+        restoreSession(generatedSession);
+      } catch (taskError) {
+        setError(getErrorMessage(taskError));
+      } finally {
+        setIsCreating(false);
+        setInterviewTaskId(null);
+      }
+    },
+    [restoreSession]
+  );
+
+  const checkUnfinishedSession = useCallback(async () => {
+    if (!resumeId) {
+      setUnfinishedSession(null);
+      return;
+    }
 
     setCheckingUnfinished(true);
     try {
       const foundSession = await interviewApi.findUnfinishedSession(resumeId);
-      if (foundSession) {
+      if (isRestorableSession(foundSession)) {
         setUnfinishedSession(foundSession);
+      } else {
+        setUnfinishedSession(null);
       }
-    } catch (err) {
-      console.error('检查未完成面试失败', err);
+    } catch (taskError) {
+      console.error('检查未完成面试失败', taskError);
+      setUnfinishedSession(null);
     } finally {
       setCheckingUnfinished(false);
     }
-  };
+  }, [resumeId]);
+
+  useEffect(() => {
+    void checkUnfinishedSession();
+  }, [checkUnfinishedSession]);
+
+  useEffect(() => {
+    if (!resumeId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const recoverLatestInterviewTask = async () => {
+      try {
+        const latestTask = await aiGenerationTaskApi.getLatestTask(
+          'INTERVIEW_SESSION_CREATE',
+          resumeId
+        );
+        if (!latestTask || cancelled) {
+          return;
+        }
+
+        await applyInterviewTask(latestTask);
+      } catch (taskError) {
+        if (!cancelled) {
+          console.error('恢复最近面试题任务失败', taskError);
+        }
+      }
+    };
+
+    void recoverLatestInterviewTask();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeId, applyInterviewTask]);
+
+  useEffect(() => {
+    if (!interviewTaskId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollTask = async () => {
+      try {
+        const task = await aiGenerationTaskApi.getTask(interviewTaskId);
+        if (!cancelled) {
+          await applyInterviewTask(task);
+        }
+      } catch (taskError) {
+        if (!cancelled) {
+          setIsCreating(false);
+          setInterviewTaskId(null);
+          setError(getErrorMessage(taskError));
+        }
+      }
+    };
+
+    const timer = window.setInterval(() => {
+      void pollTask();
+    }, INTERVIEW_TASK_POLL_INTERVAL_MS);
+
+    void pollTask();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [interviewTaskId, applyInterviewTask]);
 
   const handleContinueUnfinished = () => {
-    if (!unfinishedSession) return;
-    setForceCreateNew(false);  // 重置强制创建标志
+    if (!unfinishedSession) {
+      return;
+    }
+
+    setForceCreateNew(false);
+    setError('');
+    setInterviewTaskId(null);
     restoreSession(unfinishedSession);
     setUnfinishedSession(null);
   };
 
-    const handleStartNew = () => {
+  const handleStartNew = () => {
     setUnfinishedSession(null);
-    setForceCreateNew(true);  // 标记需要强制创建新会话
+    setForceCreateNew(true);
   };
 
-    const restoreSession = (sessionToRestore: InterviewSession) => {
-    setSession(sessionToRestore);
-
-        // 恢复当前问题
-    const currentQ = sessionToRestore.questions[sessionToRestore.currentQuestionIndex];
-    if (currentQ) {
-      setCurrentQuestion(currentQ);
-
-        // 如果当前问题已有答案，显示在输入框中
-      if (currentQ.userAnswer) {
-        setAnswer(currentQ.userAnswer);
-      }
-
-        // 恢复消息历史
-      const restoredMessages: Message[] = [];
-      for (let i = 0; i <= sessionToRestore.currentQuestionIndex; i++) {
-        const q = sessionToRestore.questions[i];
-        restoredMessages.push({
-          type: 'interviewer',
-          content: q.question,
-          category: q.category,
-          questionIndex: i
-        });
-        if (q.userAnswer) {
-          restoredMessages.push({
-            type: 'user',
-            content: q.userAnswer
-          });
-        }
-      }
-      setMessages(restoredMessages);
-    }
-
-        setStage('interview');
-  };
-
-    const startInterview = async () => {
+  const startInterview = async () => {
     setIsCreating(true);
     setError('');
+    setSession(null);
+    setCurrentQuestion(null);
+    setMessages([]);
+    setAnswer('');
 
-        try {
-      // 创建新面试（如果 forceCreateNew 为 true，则强制创建新会话）
-      const newSession = await interviewApi.createSession({
+    try {
+      const task = await interviewApi.createSessionTask({
         resumeText,
         questionCount,
         resumeId,
         jobId: jobTarget?.jobId,
-        forceCreate: forceCreateNew
+        forceCreate: forceCreateNew,
       });
 
-            // 重置强制创建标志
+      await applyInterviewTask(task);
+    } catch (taskError) {
+      setError(getErrorMessage(taskError));
       setForceCreateNew(false);
-
-            // 如果返回的是未完成的会话（currentQuestionIndex > 0 或已有答案），恢复它
-            const hasProgress = newSession.currentQuestionIndex > 0 ||
-                          newSession.questions.some(q => q.userAnswer) ||
-                          newSession.status === 'IN_PROGRESS';
-
-            if (hasProgress) {
-        // 这是恢复的会话
-        restoreSession(newSession);
-      } else {
-        // 全新的会话
-        setSession(newSession);
-
-                if (newSession.questions.length > 0) {
-          const firstQuestion = newSession.questions[0];
-          setCurrentQuestion(firstQuestion);
-          setMessages([{
-            type: 'interviewer',
-            content: firstQuestion.question,
-            category: firstQuestion.category,
-            questionIndex: 0
-          }]);
-        }
-
-                setStage('interview');
-      }
-    } catch (err) {
-      setError('创建面试失败，请重试');
-      console.error(err);
-      setForceCreateNew(false);  // 出错时也重置标志
-    } finally {
+      setInterviewTaskId(null);
       setIsCreating(false);
     }
   };
 
-    const handleSubmitAnswer = async () => {
-    if (!answer.trim() || !session || !currentQuestion) return;
+  const handleSubmitAnswer = async () => {
+    if (!answer.trim() || !session || !currentQuestion) {
+      return;
+    }
 
     setIsSubmitting(true);
-
-    const userMessage: Message = {
-      type: 'user',
-      content: answer
-    };
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(previous => [
+      ...previous,
+      {
+        type: 'user',
+        content: answer,
+      },
+    ]);
 
     try {
       const response = await interviewApi.submitAnswer({
         sessionId: session.sessionId,
         questionIndex: currentQuestion.questionIndex,
-        answer: answer.trim()
+        answer: answer.trim(),
       });
 
       setAnswer('');
 
       if (response.hasNextQuestion && response.nextQuestion) {
-        setCurrentQuestion(response.nextQuestion);
-        setMessages(prev => [...prev, {
-          type: 'interviewer',
-          content: response.nextQuestion!.question,
-          category: response.nextQuestion!.category,
-          questionIndex: response.nextQuestion!.questionIndex
-        }]);
+        const nextQuestion = response.nextQuestion;
+        setCurrentQuestion(nextQuestion);
+        setMessages(previous => [
+          ...previous,
+          {
+            type: 'interviewer',
+            content: nextQuestion.question,
+            category: nextQuestion.category,
+            questionIndex: nextQuestion.questionIndex,
+          },
+        ]);
       } else {
-        // 面试已完成，评估将在后台进行，跳转到面试记录页
         onInterviewComplete();
       }
-    } catch (err) {
+    } catch (submitError) {
       setError('提交答案失败，请重试');
-      console.error(err);
+      console.error(submitError);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleCompleteEarly = async () => {
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       await interviewApi.completeInterview(session.sessionId);
       setShowCompleteConfirm(false);
-      // 面试已完成，评估将在后台进行，跳转到面试记录页
       onInterviewComplete();
-    } catch (err) {
+    } catch (submitError) {
       setError('提前交卷失败，请重试');
-      console.error(err);
+      console.error(submitError);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-    // 配置界面
-  const renderConfig = () => {
-    return (
-      <InterviewConfigPanel
-        questionCount={questionCount}
-        onQuestionCountChange={setQuestionCount}
-        onStart={startInterview}
-        isCreating={isCreating}
-        checkingUnfinished={checkingUnfinished}
-        unfinishedSession={unfinishedSession}
-        onContinueUnfinished={handleContinueUnfinished}
-        onStartNew={handleStartNew}
-        resumeText={resumeText}
-        jobTarget={jobTarget}
-        onBack={onBack}
-        error={error}
-      />
-    );
-  };
+  const renderConfig = () => (
+    <InterviewConfigPanel
+      questionCount={questionCount}
+      onQuestionCountChange={setQuestionCount}
+      onStart={startInterview}
+      isCreating={isCreating}
+      checkingUnfinished={checkingUnfinished}
+      unfinishedSession={unfinishedSession}
+      onContinueUnfinished={handleContinueUnfinished}
+      onStartNew={handleStartNew}
+      resumeText={resumeText}
+      jobTarget={jobTarget}
+      onBack={onBack}
+      error={error}
+      interviewTaskId={interviewTaskId}
+    />
+  );
 
-    // 面试对话界面
   const renderInterview = () => {
-    if (!session || !currentQuestion) return null;
+    if (!session || !currentQuestion) {
+      return null;
+    }
 
     return (
       <InterviewChatPanel
@@ -266,32 +404,61 @@ export default function Interview({
 
   const stageSubtitles = {
     config: jobTarget ? '围绕目标职位配置本次定向面试' : '配置您的面试参数',
-    interview: '认真回答每个问题，展示您的实力'
+    interview: '认真回答每个问题，展示您的真实实力',
   };
 
-    return (
+  return (
     <div className="pb-10">
-      {/* 页面头部 */}
-        <motion.div
-        className="text-center mb-10"
+      <motion.div
+        className="mb-10 text-center"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 flex items-center justify-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center">
-            <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <line x1="8" y1="23" x2="16" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <h1 className="mb-2 flex items-center justify-center gap-3 text-3xl font-bold text-slate-900 dark:text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600">
+            <svg className="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M19 10v2a7 7 0 0 1-14 0v-2"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <line
+                x1="12"
+                y1="19"
+                x2="12"
+                y2="23"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <line
+                x1="8"
+                y1="23"
+                x2="16"
+                y2="23"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
           模拟面试
         </h1>
-            <p className="text-slate-500 dark:text-slate-400">{stageSubtitles[stage]}</p>
+        <p className="text-slate-500 dark:text-slate-400">{stageSubtitles[stage]}</p>
       </motion.div>
 
-        <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence mode="wait" initial={false}>
         {stage === 'config' && (
           <motion.div
             key="config"
@@ -316,11 +483,10 @@ export default function Interview({
         )}
       </AnimatePresence>
 
-        {/* 提前交卷确认对话框 */}
       <ConfirmDialog
         open={showCompleteConfirm}
         title="提前交卷"
-        message="确定要提前交卷吗？未回答的问题将按0分计算。"
+        message="确定要提前交卷吗？未回答的问题将按 0 分计算。"
         confirmText="确定交卷"
         cancelText="取消"
         confirmVariant="warning"

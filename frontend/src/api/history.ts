@@ -40,6 +40,9 @@ export interface AnalysisItem {
 export interface InterviewItem {
   id: number;
   sessionId: string;
+  targetJobId?: number | null;
+  targetJobTitle?: string | null;
+  targetJobCompany?: string | null;
   totalQuestions: number;
   status: string;
   evaluateStatus?: EvaluateStatus;

@@ -1,4 +1,5 @@
 import { request } from './request';
+import type { AiGenerationTask } from '../types/ai-generation-task';
 import type {
   CreateInterviewRequest,
   CurrentQuestionResponse,
@@ -16,6 +17,13 @@ export const interviewApi = {
     return request.post<InterviewSession>('/api/interview/sessions', req, {
       timeout: 180000, // 3分钟超时，AI生成问题需要时间
     });
+  },
+
+  /**
+   * 创建面试题后台任务
+   */
+  async createSessionTask(req: CreateInterviewRequest): Promise<AiGenerationTask> {
+    return request.post<AiGenerationTask>('/api/interview/session-tasks', req);
   },
 
   /**

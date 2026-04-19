@@ -5,8 +5,12 @@ import com.nbwf.common.constant.AsyncTaskStreamConstants;
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.infrastructure.redis.RedisService;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskEntity;
 import com.nbwf.modules.aigeneration.model.AiGenerationTaskType;
 import com.nbwf.modules.aigeneration.service.AiGenerationTaskService;
+import com.nbwf.modules.interview.model.CreateInterviewRequest;
+import com.nbwf.modules.interview.model.InterviewSessionDTO;
+import com.nbwf.modules.interview.service.InterviewSessionService;
 import com.nbwf.modules.job.model.ResumeJobDraftDTO;
 import com.nbwf.modules.job.service.ResumeJobDraftService;
 import com.nbwf.modules.resume.model.ResumeEntity;
@@ -32,17 +36,20 @@ public class AiGenerationStreamConsumer extends AbstractStreamConsumer<AiGenerat
     private final AiGenerationTaskService aiGenerationTaskService;
     private final ResumeRepository resumeRepository;
     private final ResumeJobDraftService resumeJobDraftService;
+    private final InterviewSessionService interviewSessionService;
     private final ObjectMapper objectMapper;
 
     public AiGenerationStreamConsumer(RedisService redisService,
                                       AiGenerationTaskService aiGenerationTaskService,
                                       ResumeRepository resumeRepository,
                                       ResumeJobDraftService resumeJobDraftService,
+                                      InterviewSessionService interviewSessionService,
                                       ObjectMapper objectMapper) {
         super(redisService);
         this.aiGenerationTaskService = aiGenerationTaskService;
         this.resumeRepository = resumeRepository;
         this.resumeJobDraftService = resumeJobDraftService;
+        this.interviewSessionService = interviewSessionService;
         this.objectMapper = objectMapper;
     }
 
@@ -131,7 +138,7 @@ public class AiGenerationStreamConsumer extends AbstractStreamConsumer<AiGenerat
     protected void processBusiness(AiGenerationPayload payload) {
         switch (payload.type) {
             case RESUME_JOB_DRAFT -> processResumeJobDraft(payload);
-            case INTERVIEW_SESSION_CREATE -> throw new IllegalStateException("面试题生成任务尚未接入");
+            case INTERVIEW_SESSION_CREATE -> processInterviewSessionCreate(payload);
         }
     }
 
@@ -183,6 +190,17 @@ public class AiGenerationStreamConsumer extends AbstractStreamConsumer<AiGenerat
             payload.resultJson = objectMapper.writeValueAsString(Map.of("drafts", drafts));
         } catch (JacksonException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "序列化职位草稿结果失败");
+        }
+    }
+
+    private void processInterviewSessionCreate(AiGenerationPayload payload) {
+        AiGenerationTaskEntity task = aiGenerationTaskService.getTaskEntity(payload.taskId, payload.userId);
+        try {
+            CreateInterviewRequest request = objectMapper.readValue(task.getRequestJson(), CreateInterviewRequest.class);
+            InterviewSessionDTO session = interviewSessionService.createSession(request, payload.userId);
+            payload.resultJson = objectMapper.writeValueAsString(Map.of("sessionId", session.sessionId()));
+        } catch (JacksonException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "序列化面试任务数据失败");
         }
     }
 }

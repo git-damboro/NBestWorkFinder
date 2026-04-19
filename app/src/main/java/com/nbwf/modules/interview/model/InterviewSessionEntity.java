@@ -29,6 +29,15 @@ public class InterviewSessionEntity {
     // 会话ID (UUID)
     @Column(nullable = false, unique = true, length = 36)
     private String sessionId;
+
+    @Column(name = "target_job_id")
+    private Long targetJobId;
+
+    @Column(name = "target_job_title", length = 200)
+    private String targetJobTitle;
+
+    @Column(name = "target_job_company", length = 200)
+    private String targetJobCompany;
     
     // 关联的简历
     @ManyToOne(fetch = FetchType.LAZY)
@@ -124,6 +133,30 @@ public class InterviewSessionEntity {
     
     public void setSessionId(String sessionId) {
         this.sessionId = sessionId;
+    }
+
+    public Long getTargetJobId() {
+        return targetJobId;
+    }
+
+    public void setTargetJobId(Long targetJobId) {
+        this.targetJobId = targetJobId;
+    }
+
+    public String getTargetJobTitle() {
+        return targetJobTitle;
+    }
+
+    public void setTargetJobTitle(String targetJobTitle) {
+        this.targetJobTitle = targetJobTitle;
+    }
+
+    public String getTargetJobCompany() {
+        return targetJobCompany;
+    }
+
+    public void setTargetJobCompany(String targetJobCompany) {
+        this.targetJobCompany = targetJobCompany;
     }
     
     public ResumeEntity getResume() {

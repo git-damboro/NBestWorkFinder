@@ -14,7 +14,10 @@ public record InterviewReportDTO(
     String overallFeedback,                    // 总体评价
     List<String> strengths,                    // 优势
     List<String> improvements,                 // 改进建议
-    List<ReferenceAnswer> referenceAnswers     // 参考答案
+    List<ReferenceAnswer> referenceAnswers,    // 参考答案
+    Long targetJobId,
+    String targetJobTitle,
+    String targetJobCompany
 ) {
     /**
      * 类别得分

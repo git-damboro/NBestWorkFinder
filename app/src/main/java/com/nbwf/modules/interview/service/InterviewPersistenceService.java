@@ -46,6 +46,16 @@ public class InterviewPersistenceService {
     public InterviewSessionEntity saveSession(String sessionId, Long resumeId, Long userId,
                                               int totalQuestions, 
                                               List<InterviewQuestionDTO> questions) {
+        return saveSession(sessionId, resumeId, userId, totalQuestions, questions, null, null, null);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public InterviewSessionEntity saveSession(String sessionId, Long resumeId, Long userId,
+                                              int totalQuestions,
+                                              List<InterviewQuestionDTO> questions,
+                                              Long targetJobId,
+                                              String targetJobTitle,
+                                              String targetJobCompany) {
         try {
             Optional<ResumeEntity> resumeOpt = resumeRepository.findByIdAndUserId(resumeId, userId);
             if (resumeOpt.isEmpty()) {
@@ -59,6 +69,9 @@ public class InterviewPersistenceService {
             session.setTotalQuestions(totalQuestions);
             session.setCurrentQuestionIndex(0);
             session.setStatus(InterviewSessionEntity.SessionStatus.CREATED);
+            session.setTargetJobId(targetJobId);
+            session.setTargetJobTitle(targetJobTitle);
+            session.setTargetJobCompany(targetJobCompany);
             session.setQuestionsJson(objectMapper.writeValueAsString(questions));
             
             InterviewSessionEntity saved = sessionRepository.save(session);

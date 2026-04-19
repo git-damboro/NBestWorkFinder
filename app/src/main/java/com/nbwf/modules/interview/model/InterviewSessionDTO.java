@@ -11,7 +11,10 @@ public record InterviewSessionDTO(
     int totalQuestions,
     int currentQuestionIndex,
     List<InterviewQuestionDTO> questions,
-    SessionStatus status
+    SessionStatus status,
+    Long targetJobId,
+    String targetJobTitle,
+    String targetJobCompany
 ) {
     public enum SessionStatus {
         CREATED,      // 会话已创建

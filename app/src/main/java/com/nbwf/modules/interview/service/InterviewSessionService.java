@@ -5,6 +5,10 @@ import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.common.model.AsyncTaskStatus;
 import com.nbwf.infrastructure.redis.InterviewSessionCache;
 import com.nbwf.infrastructure.redis.InterviewSessionCache.CachedSession;
+import com.nbwf.modules.aigeneration.listener.AiGenerationStreamProducer;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskDTO;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskType;
+import com.nbwf.modules.aigeneration.service.AiGenerationTaskService;
 import com.nbwf.modules.interview.listener.EvaluateStreamProducer;
 import com.nbwf.modules.interview.model.*;
 import com.nbwf.modules.interview.model.InterviewSessionDTO.SessionStatus;
@@ -13,6 +17,7 @@ import com.nbwf.modules.job.service.JobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -38,6 +43,34 @@ public class InterviewSessionService {
     private final ObjectMapper objectMapper;
     private final EvaluateStreamProducer evaluateStreamProducer;
     private final JobService jobService;
+    private final AiGenerationTaskService aiGenerationTaskService;
+    private final AiGenerationStreamProducer aiGenerationStreamProducer;
+
+    /**
+     * 创建面试题生成后台任务；页面切走后由 Redis Stream 消费器继续生成。
+     */
+    public AiGenerationTaskDTO createSessionTask(CreateInterviewRequest request, Long userId) {
+        if (request.resumeId() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "简历ID不能为空");
+        }
+
+        try {
+            String requestJson = objectMapper.writeValueAsString(request);
+            AiGenerationTaskService.TaskCreationResult result = aiGenerationTaskService.createOrReuseTaskResult(
+                userId,
+                AiGenerationTaskType.INTERVIEW_SESSION_CREATE,
+                request.resumeId(),
+                request.jobId(),
+                requestJson
+            );
+            if (!result.reused()) {
+                aiGenerationStreamProducer.sendTask(result.task());
+            }
+            return aiGenerationTaskService.toDTO(result.task());
+        } catch (JacksonException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "序列化面试题生成请求失败");
+        }
+    }
 
     /**
      * 创建新的面试会话
@@ -66,15 +99,15 @@ public class InterviewSessionService {
             historicalQuestions = persistenceService.getHistoricalQuestionsByResumeId(request.resumeId(), userId);
         }
 
-        // 如果用户从职位工作台发起面试，则把职位 JD / 标签注入到出题上下文中。
-        String targetJobContext = buildTargetJobContext(request.jobId(), userId);
+        // 如果用户从职位工作台发起面试，则只查一次职位，同时得到出题上下文和历史快照。
+        TargetJobSnapshot targetJob = resolveTargetJobSnapshot(request.jobId(), userId);
 
         // 生成面试问题
         List<InterviewQuestionDTO> questions = questionService.generateQuestions(
             request.resumeText(),
             request.questionCount(),
             historicalQuestions,
-            targetJobContext
+            targetJob.context()
         );
 
         // 保存到 Redis 缓存
@@ -85,14 +118,17 @@ public class InterviewSessionService {
             request.resumeId(),
             questions,
             0,
-            SessionStatus.CREATED
+            SessionStatus.CREATED,
+            targetJob.jobId(),
+            targetJob.title(),
+            targetJob.company()
         );
 
         // 保存到数据库
         if (request.resumeId() != null) {
             try {
                 persistenceService.saveSession(sessionId, request.resumeId(), userId,
-                    questions.size(), questions);
+                    questions.size(), questions, targetJob.jobId(), targetJob.title(), targetJob.company());
             } catch (Exception e) {
                 log.warn("保存面试会话到数据库失败: {}", e.getMessage());
             }
@@ -104,13 +140,16 @@ public class InterviewSessionService {
             questions.size(),
             0,
             questions,
-            SessionStatus.CREATED
+            SessionStatus.CREATED,
+            targetJob.jobId(),
+            targetJob.title(),
+            targetJob.company()
         );
     }
 
-    private String buildTargetJobContext(Long jobId, Long userId) {
+    private TargetJobSnapshot resolveTargetJobSnapshot(Long jobId, Long userId) {
         if (jobId == null) {
-            return null;
+            return TargetJobSnapshot.empty();
         }
 
         JobDetailDTO job = jobService.getDetail(jobId, userId);
@@ -121,7 +160,7 @@ public class InterviewSessionService {
             ? "暂无备注"
             : job.notes();
 
-        return String.format(
+        String context = String.format(
             """
             目标职位信息：
             - 职位名称：%s
@@ -139,6 +178,13 @@ public class InterviewSessionService {
             job.description(),
             notes
         ).trim();
+        return new TargetJobSnapshot(job.id(), job.title(), job.company(), context);
+    }
+
+    private record TargetJobSnapshot(Long jobId, String title, String company, String context) {
+        static TargetJobSnapshot empty() {
+            return new TargetJobSnapshot(null, null, null, null);
+        }
     }
 
     /**
@@ -253,7 +299,10 @@ public class InterviewSessionService {
                 entity.getResume().getId(),
                 questions,
                 entity.getCurrentQuestionIndex(),
-                status
+                status,
+                entity.getTargetJobId(),
+                entity.getTargetJobTitle(),
+                entity.getTargetJobCompany()
             );
 
             log.info("从数据库恢复会话到 Redis: sessionId={}, currentIndex={}, status={}",
@@ -508,6 +557,7 @@ public class InterviewSessionService {
             session.getResumeText(),
             questions
         );
+        report = attachTargetJobSnapshot(report, session);
 
         // 更新 Redis 缓存状态
         sessionCache.updateSessionStatus(sessionId, SessionStatus.EVALUATED);
@@ -533,7 +583,27 @@ public class InterviewSessionService {
             questions.size(),
             session.getCurrentIndex(),
             questions,
-            session.getStatus()
+            session.getStatus(),
+            session.getTargetJobId(),
+            session.getTargetJobTitle(),
+            session.getTargetJobCompany()
+        );
+    }
+
+    private InterviewReportDTO attachTargetJobSnapshot(InterviewReportDTO report, CachedSession session) {
+        return new InterviewReportDTO(
+            report.sessionId(),
+            report.totalQuestions(),
+            report.overallScore(),
+            report.categoryScores(),
+            report.questionDetails(),
+            report.overallFeedback(),
+            report.strengths(),
+            report.improvements(),
+            report.referenceAnswers(),
+            session.getTargetJobId(),
+            session.getTargetJobTitle(),
+            session.getTargetJobCompany()
         );
     }
 }

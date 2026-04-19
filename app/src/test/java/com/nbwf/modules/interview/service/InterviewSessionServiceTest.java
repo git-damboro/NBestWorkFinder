@@ -1,6 +1,8 @@
 package com.nbwf.modules.interview.service;
 
 import com.nbwf.infrastructure.redis.InterviewSessionCache;
+import com.nbwf.modules.aigeneration.listener.AiGenerationStreamProducer;
+import com.nbwf.modules.aigeneration.service.AiGenerationTaskService;
 import com.nbwf.modules.interview.listener.EvaluateStreamProducer;
 import com.nbwf.modules.interview.model.CreateInterviewRequest;
 import com.nbwf.modules.interview.model.InterviewQuestionDTO;
@@ -48,6 +50,12 @@ class InterviewSessionServiceTest {
 
     @Mock
     private JobService jobService;
+
+    @Mock
+    private AiGenerationTaskService aiGenerationTaskService;
+
+    @Mock
+    private AiGenerationStreamProducer aiGenerationStreamProducer;
 
     @InjectMocks
     private InterviewSessionService interviewSessionService;
@@ -107,7 +115,23 @@ class InterviewSessionServiceTest {
             21L,
             generatedQuestions,
             0,
-            InterviewSessionDTO.SessionStatus.CREATED
+            InterviewSessionDTO.SessionStatus.CREATED,
+            31L,
+            "Java 后端开发工程师",
+            "示例科技"
         );
+        verify(persistenceService).saveSession(
+            session.sessionId(),
+            21L,
+            7L,
+            generatedQuestions.size(),
+            generatedQuestions,
+            31L,
+            "Java 后端开发工程师",
+            "示例科技"
+        );
+        assertEquals(31L, session.targetJobId());
+        assertEquals("Java 后端开发工程师", session.targetJobTitle());
+        assertEquals("示例科技", session.targetJobCompany());
     }
 }

@@ -52,6 +52,9 @@ public class InterviewSessionCache {
         private Long userId;
         private String resumeText;
         private Long resumeId;
+        private Long targetJobId;
+        private String targetJobTitle;
+        private String targetJobCompany;
         private String questionsJson;  // 序列化的问题列表
         private int currentIndex;
         private SessionStatus status;
@@ -62,10 +65,21 @@ public class InterviewSessionCache {
         public CachedSession(String sessionId, Long userId, String resumeText, Long resumeId,
                             List<InterviewQuestionDTO> questions, int currentIndex,
                             SessionStatus status, ObjectMapper objectMapper) {
+            this(sessionId, userId, resumeText, resumeId, questions, currentIndex, status,
+                null, null, null, objectMapper);
+        }
+
+        public CachedSession(String sessionId, Long userId, String resumeText, Long resumeId,
+                            List<InterviewQuestionDTO> questions, int currentIndex,
+                            SessionStatus status, Long targetJobId, String targetJobTitle,
+                            String targetJobCompany, ObjectMapper objectMapper) {
             this.sessionId = sessionId;
             this.userId = userId;
             this.resumeText = resumeText;
             this.resumeId = resumeId;
+            this.targetJobId = targetJobId;
+            this.targetJobTitle = targetJobTitle;
+            this.targetJobCompany = targetJobCompany;
             this.currentIndex = currentIndex;
             this.status = status;
             try {
@@ -90,9 +104,18 @@ public class InterviewSessionCache {
     public void saveSession(String sessionId, Long userId, String resumeText, Long resumeId,
                            List<InterviewQuestionDTO> questions, int currentIndex,
                            SessionStatus status) {
+        saveSession(sessionId, userId, resumeText, resumeId, questions, currentIndex, status,
+            null, null, null);
+    }
+
+    public void saveSession(String sessionId, Long userId, String resumeText, Long resumeId,
+                           List<InterviewQuestionDTO> questions, int currentIndex,
+                           SessionStatus status, Long targetJobId, String targetJobTitle,
+                           String targetJobCompany) {
         String key = buildSessionKey(sessionId);
         CachedSession cachedSession = new CachedSession(
-            sessionId, userId, resumeText, resumeId, questions, currentIndex, status, objectMapper
+            sessionId, userId, resumeText, resumeId, questions, currentIndex, status,
+            targetJobId, targetJobTitle, targetJobCompany, objectMapper
         );
 
         redisService.set(key, cachedSession, SESSION_TTL);

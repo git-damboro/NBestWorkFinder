@@ -7,6 +7,9 @@ export interface InterviewSession {
   currentQuestionIndex: number;
   questions: InterviewQuestion[];
   status: 'CREATED' | 'IN_PROGRESS' | 'COMPLETED' | 'EVALUATED';
+  targetJobId?: number | null;
+  targetJobTitle?: string | null;
+  targetJobCompany?: string | null;
 }
 
 export interface InterviewQuestion {
@@ -74,6 +77,9 @@ export interface InterviewReport {
   strengths: string[];
   improvements: string[];
   referenceAnswers: ReferenceAnswer[];
+  targetJobId?: number | null;
+  targetJobTitle?: string | null;
+  targetJobCompany?: string | null;
 }
 
 export interface CategoryScore {
