@@ -2,12 +2,13 @@ import {useCallback, useEffect, useState} from 'react';
 import {useLocation, useNavigate} from 'react-router-dom';
 import {AnimatePresence, motion} from 'framer-motion';
 import {historyApi, InterviewDetail, ResumeDetail} from '../api/history';
-import {jobApi} from '../api';
+import {aiGenerationTaskApi, jobApi} from '../api';
 import {getErrorMessage} from '../api/request';
 import AnalysisPanel from '../components/AnalysisPanel';
 import InterviewPanel from '../components/InterviewPanel';
 import InterviewDetailPanel from '../components/InterviewDetailPanel';
 import ResumeJobDraftDialog from '../components/ResumeJobDraftDialog';
+import type {AiGenerationTask} from '../types/ai-generation-task';
 import type {ResumeJobDraft} from '../types/job';
 import {formatDateOnly} from '../utils/date';
 import {BriefcaseBusiness, CheckSquare, ChevronLeft, Clock, Download, MessageSquare, Mic} from 'lucide-react';
@@ -20,6 +21,7 @@ interface ResumeDetailPageProps {
 
 type TabType = 'analysis' | 'interview';
 type DetailViewType = 'list' | 'interviewDetail';
+const JOB_DRAFT_POLL_INTERVAL_MS = 3000;
 
 export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }: ResumeDetailPageProps) {
   const location = useLocation();
@@ -38,6 +40,7 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
   const [generatingJobDrafts, setGeneratingJobDrafts] = useState(false);
   const [savingJobDraft, setSavingJobDraft] = useState(false);
   const [jobDraftError, setJobDraftError] = useState<string | null>(null);
+  const [jobDraftTaskId, setJobDraftTaskId] = useState<string | null>(null);
 
   // 静默加载数据（用于轮询）
   const loadResumeDetailSilent = useCallback(async () => {
@@ -175,23 +178,148 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
     setSelectedInterview(null);
   };
 
-  const handleGenerateJobDrafts = async () => {
-    setGeneratingJobDrafts(true);
-    setJobDraftError(null);
+  const getDismissedJobDraftTaskKey = (taskId: string) => `resume-job-draft-task-dismissed:${taskId}`;
+
+  const isDismissedJobDraftTask = (taskId: string) => {
+    try {
+      return window.sessionStorage.getItem(getDismissedJobDraftTaskKey(taskId)) === '1';
+    } catch {
+      return false;
+    }
+  };
+
+  const dismissJobDraftTask = (taskId: string) => {
+    try {
+      window.sessionStorage.setItem(getDismissedJobDraftTaskKey(taskId), '1');
+    } catch {
+      // sessionStorage 不可用时忽略，只影响是否重复自动弹出结果。
+    }
+  };
+
+  const parseJobDraftTaskResult = (task: AiGenerationTask): ResumeJobDraft[] => {
+    if (!task.resultJson) {
+      return [];
+    }
+    const parsed = JSON.parse(task.resultJson) as { drafts?: ResumeJobDraft[] };
+    return Array.isArray(parsed.drafts) ? parsed.drafts : [];
+  };
+
+  const applyJobDraftTask = useCallback((task: AiGenerationTask) => {
+    setJobDraftTaskId(task.taskId);
+    setJobDraftDialogOpen(true);
+
+    if (task.status === 'PENDING' || task.status === 'PROCESSING') {
+      setGeneratingJobDrafts(true);
+      setJobDraftError(null);
+      return;
+    }
+
+    setGeneratingJobDrafts(false);
+
+    if (task.status === 'FAILED') {
+      setJobDrafts([]);
+      setJobDraftError(task.errorMessage || '职位草稿生成失败，请重试。');
+      setJobDraftTaskId(null);
+      return;
+    }
 
     try {
-      const drafts = await jobApi.generateDraftsFromResume(resumeId);
+      const drafts = parseJobDraftTaskResult(task);
       setJobDrafts(drafts);
       if (drafts.length === 0) {
         setJobDraftError('当前简历暂未生成可用的职位草稿，请补充更完整的简历内容后重试。');
+      } else {
+        setJobDraftError(null);
       }
-      setJobDraftDialogOpen(true);
+      setJobDraftTaskId(null);
     } catch (error) {
       setJobDrafts([]);
       setJobDraftError(getErrorMessage(error));
-      setJobDraftDialogOpen(true);
-    } finally {
+      setJobDraftTaskId(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const recoverLatestDraftTask = async () => {
+      try {
+        const task = await aiGenerationTaskApi.getLatestTask('RESUME_JOB_DRAFT', resumeId);
+        if (!task || cancelled || isDismissedJobDraftTask(task.taskId)) {
+          return;
+        }
+        applyJobDraftTask(task);
+      } catch (error) {
+        console.error('恢复最近职位草稿任务失败', error);
+      }
+    };
+
+    recoverLatestDraftTask();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeId, applyJobDraftTask]);
+
+  useEffect(() => {
+    if (!jobDraftTaskId) {
+      return;
+    }
+
+    let cancelled = false;
+    const pollTask = async () => {
+      try {
+        const task = await aiGenerationTaskApi.getTask(jobDraftTaskId);
+        if (!cancelled) {
+          applyJobDraftTask(task);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setGeneratingJobDrafts(false);
+          setJobDraftError(getErrorMessage(error));
+          setJobDraftTaskId(null);
+        }
+      }
+    };
+
+    const timer = window.setInterval(pollTask, JOB_DRAFT_POLL_INTERVAL_MS);
+    pollTask();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [jobDraftTaskId, applyJobDraftTask]);
+
+  const handleGenerateJobDrafts = async () => {
+    setGeneratingJobDrafts(true);
+    setJobDraftError(null);
+    setJobDrafts([]);
+    setJobDraftDialogOpen(true);
+
+    try {
+      const task = await jobApi.createDraftTaskFromResume(resumeId);
+      applyJobDraftTask(task);
+    } catch (error) {
+      setJobDrafts([]);
+      setJobDraftError(getErrorMessage(error));
+      setJobDraftTaskId(null);
       setGeneratingJobDrafts(false);
+    }
+  };
+
+  const handleCloseJobDraftDialog = () => {
+    if (jobDraftTaskId && !generatingJobDrafts) {
+      dismissJobDraftTask(jobDraftTaskId);
+    }
+    setJobDraftDialogOpen(false);
+    setJobDraftTaskId(null);
+    setGeneratingJobDrafts(false);
+  };
+
+  const markCurrentDraftTaskDismissed = () => {
+    if (jobDraftTaskId) {
+      dismissJobDraftTask(jobDraftTaskId);
     }
   };
 
@@ -207,7 +335,9 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
         notes: draft.defaultNotes,
       });
 
+      markCurrentDraftTaskDismissed();
       setJobDraftDialogOpen(false);
+      setJobDraftTaskId(null);
       navigate('/jobs', {
         state: {
           selectedJobId: createdJob.id,
@@ -429,10 +559,7 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
         loading={generatingJobDrafts}
         saving={savingJobDraft}
         error={jobDraftError}
-        onClose={() => {
-          setJobDraftDialogOpen(false);
-          setJobDraftError(null);
-        }}
+        onClose={handleCloseJobDraftDialog}
         onRetry={() => void handleGenerateJobDrafts()}
         onSelect={(draft) => void handleSaveJobDraft(draft)}
       />

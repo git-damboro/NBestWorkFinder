@@ -1,4 +1,5 @@
 import { request } from './request';
+import type { AiGenerationTask } from '../types/ai-generation-task';
 import type {
   CreateJobForm,
   JobApplicationStatus,
@@ -39,6 +40,13 @@ export const jobApi = {
    */
   async generateDraftsFromResume(resumeId: number): Promise<ResumeJobDraft[]> {
     return request.post<ResumeJobDraft[]>(`/api/jobs/drafts/from-resume/${resumeId}`);
+  },
+
+  /**
+   * 创建根据简历生成职位草稿的后台任务
+   */
+  async createDraftTaskFromResume(resumeId: number): Promise<AiGenerationTask> {
+    return request.post<AiGenerationTask>(`/api/jobs/draft-tasks/from-resume/${resumeId}`);
   },
 
   /**

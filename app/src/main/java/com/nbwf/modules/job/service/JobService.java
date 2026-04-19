@@ -2,6 +2,11 @@ package com.nbwf.modules.job.service;
 
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
+import com.nbwf.modules.aigeneration.listener.AiGenerationStreamProducer;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskDTO;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskEntity;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskType;
+import com.nbwf.modules.aigeneration.service.AiGenerationTaskService;
 import com.nbwf.modules.job.model.*;
 import com.nbwf.modules.job.repository.JobRepository;
 import com.nbwf.modules.resume.model.ResumeEntity;
@@ -24,6 +29,8 @@ public class JobService {
     private final JobMatchService matchService;
     private final ResumeRepository resumeRepository;
     private final ResumeJobDraftService resumeJobDraftService;
+    private final AiGenerationTaskService aiGenerationTaskService;
+    private final AiGenerationStreamProducer aiGenerationStreamProducer;
 
     @Transactional
     public JobDetailDTO create(CreateJobRequest req, Long userId) {
@@ -109,6 +116,34 @@ public class JobService {
         }
 
         return resumeJobDraftService.generateDrafts(resume.getResumeText());
+    }
+
+    /**
+     * 创建“根据简历生成职位草稿”的后台任务。
+     * 旧同步接口保留兼容，前端新流程优先调用该方法并轮询任务结果。
+     */
+    public AiGenerationTaskDTO createDraftTaskFromResume(Long resumeId, Long userId) {
+        ResumeEntity resume = resumeRepository.findByIdAndUserId(resumeId, userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND));
+
+        if (resume.getResumeText() == null || resume.getResumeText().isBlank()) {
+            throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED, "当前简历内容为空，无法生成职位草稿");
+        }
+
+        AiGenerationTaskService.TaskCreationResult creationResult =
+            aiGenerationTaskService.createOrReuseTaskResult(
+                userId,
+                AiGenerationTaskType.RESUME_JOB_DRAFT,
+                resumeId,
+                null,
+                "{\"resumeId\":" + resumeId + "}"
+            );
+
+        AiGenerationTaskEntity task = creationResult.task();
+        if (!creationResult.reused()) {
+            aiGenerationStreamProducer.sendTask(task);
+        }
+        return aiGenerationTaskService.getTask(task.getTaskId(), userId);
     }
 
     private JobEntity findOrThrow(Long id, Long userId) {

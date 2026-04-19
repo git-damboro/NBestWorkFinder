@@ -1,6 +1,7 @@
 package com.nbwf.modules.job;
 
 import com.nbwf.common.result.Result;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskDTO;
 import com.nbwf.modules.job.model.*;
 import com.nbwf.modules.job.service.JobService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -70,5 +71,12 @@ public class JobController {
     public Result<List<ResumeJobDraftDTO>> generateDraftsFromResume(@PathVariable Long resumeId,
                                                                     @AuthenticationPrincipal Long userId) {
         return Result.success(jobService.generateDraftsFromResume(resumeId, userId));
+    }
+
+    @Operation(summary = "创建根据简历生成职位草稿的后台任务")
+    @PostMapping("/draft-tasks/from-resume/{resumeId}")
+    public Result<AiGenerationTaskDTO> createDraftTaskFromResume(@PathVariable Long resumeId,
+                                                                 @AuthenticationPrincipal Long userId) {
+        return Result.success(jobService.createDraftTaskFromResume(resumeId, userId));
     }
 }

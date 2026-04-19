@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.time.LocalDateTime;
 
 /**
  * 通用 AI 生成任务服务。
@@ -32,6 +33,9 @@ public class AiGenerationTaskService {
     private final AiGenerationTaskRepository aiGenerationTaskRepository;
     private final ConcurrentHashMap<String, ReentrantLock> taskCreationLocks = new ConcurrentHashMap<>();
 
+    public record TaskCreationResult(AiGenerationTaskEntity task, boolean reused) {
+    }
+
     /**
      * 创建任务或复用同类运行中任务，避免短时间重复生成。
      * 这里按任务业务键加本地锁，避免同一应用实例内并发请求重复创建运行中任务。
@@ -42,6 +46,18 @@ public class AiGenerationTaskService {
                                                     Long sourceId,
                                                     Long targetId,
                                                     String requestJson) {
+        return createOrReuseTaskResult(userId, type, sourceId, targetId, requestJson).task();
+    }
+
+    /**
+     * 创建任务或复用同类运行中任务，并返回是否复用，便于调用方只对新任务入队一次。
+     */
+    @Transactional
+    public TaskCreationResult createOrReuseTaskResult(Long userId,
+                                                      AiGenerationTaskType type,
+                                                      Long sourceId,
+                                                      Long targetId,
+                                                      String requestJson) {
         String lockKey = buildLockKey(userId, type, sourceId, targetId);
         ReentrantLock lock = taskCreationLocks.computeIfAbsent(lockKey, key -> new ReentrantLock());
         lock.lock();
@@ -54,13 +70,14 @@ public class AiGenerationTaskService {
                     targetId,
                     RUNNING_STATUSES
                 )
-                .orElseGet(() -> aiGenerationTaskRepository.save(buildPendingTask(
+                .map(task -> new TaskCreationResult(task, true))
+                .orElseGet(() -> new TaskCreationResult(aiGenerationTaskRepository.save(buildPendingTask(
                     userId,
                     type,
                     sourceId,
                     targetId,
                     requestJson
-                )));
+                )), false));
         } finally {
             lock.unlock();
             if (!lock.hasQueuedThreads()) {
@@ -89,6 +106,42 @@ public class AiGenerationTaskService {
             .findFirstByUserIdAndTypeAndSourceIdOrderByCreatedAtDesc(userId, type, sourceId)
             .map(this::toDTO)
             .orElse(null);
+    }
+
+    /**
+     * 标记任务进入后台处理中。
+     */
+    @Transactional
+    public void markProcessing(String taskId, Long userId) {
+        AiGenerationTaskEntity task = findTaskOrThrow(taskId, userId);
+        task.setStatus(AsyncTaskStatus.PROCESSING);
+        task.setErrorMessage(null);
+        aiGenerationTaskRepository.save(task);
+    }
+
+    /**
+     * 标记任务完成，并写入可被前端恢复的结果 JSON。
+     */
+    @Transactional
+    public void markCompleted(String taskId, Long userId, String resultJson) {
+        AiGenerationTaskEntity task = findTaskOrThrow(taskId, userId);
+        task.setStatus(AsyncTaskStatus.COMPLETED);
+        task.setResultJson(resultJson);
+        task.setErrorMessage(null);
+        task.setCompletedAt(LocalDateTime.now());
+        aiGenerationTaskRepository.save(task);
+    }
+
+    /**
+     * 标记任务失败，保留简短错误信息给前端展示。
+     */
+    @Transactional
+    public void markFailed(String taskId, Long userId, String errorMessage) {
+        AiGenerationTaskEntity task = findTaskOrThrow(taskId, userId);
+        task.setStatus(AsyncTaskStatus.FAILED);
+        task.setErrorMessage(errorMessage);
+        task.setCompletedAt(LocalDateTime.now());
+        aiGenerationTaskRepository.save(task);
     }
 
     /**
@@ -127,6 +180,11 @@ public class AiGenerationTaskService {
 
     private String generateTaskId() {
         return "agt_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    }
+
+    private AiGenerationTaskEntity findTaskOrThrow(String taskId, Long userId) {
+        return aiGenerationTaskRepository.findByTaskIdAndUserId(taskId, userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "AI 生成任务不存在"));
     }
 
     private String buildLockKey(Long userId,
