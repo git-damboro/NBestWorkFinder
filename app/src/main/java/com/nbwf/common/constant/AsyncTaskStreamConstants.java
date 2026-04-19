@@ -27,6 +27,26 @@ public final class AsyncTaskStreamConstants {
      */
     public static final String FIELD_USER_ID = "userId";
 
+    /**
+     * AI 生成任务ID字段
+     */
+    public static final String FIELD_TASK_ID = "taskId";
+
+    /**
+     * AI 生成任务类型字段
+     */
+    public static final String FIELD_TASK_TYPE = "taskType";
+
+    /**
+     * AI 生成任务来源字段
+     */
+    public static final String FIELD_SOURCE_ID = "sourceId";
+
+    /**
+     * AI 生成任务目标字段
+     */
+    public static final String FIELD_TARGET_ID = "targetId";
+
     // ========== 通用消费者配置 ==========
 
     /**
@@ -114,4 +134,21 @@ public final class AsyncTaskStreamConstants {
      * 面试会话ID字段
      */
     public static final String FIELD_SESSION_ID = "sessionId";
+
+    // ========== AI 生成任务 Stream 配置 ==========
+
+    /**
+     * AI 生成任务 Stream Key
+     */
+    public static final String AI_GENERATION_STREAM_KEY = "ai:generation:stream";
+
+    /**
+     * AI 生成任务 Consumer Group 名称
+     */
+    public static final String AI_GENERATION_GROUP_NAME = "ai-generation-group";
+
+    /**
+     * AI 生成任务 Consumer 名称前缀
+     */
+    public static final String AI_GENERATION_CONSUMER_PREFIX = "ai-generation-consumer-";
 }
