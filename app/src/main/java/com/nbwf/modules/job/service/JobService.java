@@ -1,7 +1,5 @@
 package com.nbwf.modules.job.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.modules.aigeneration.listener.AiGenerationStreamProducer;
@@ -19,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -176,7 +176,7 @@ public class JobService {
     private String toJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "职位任务数据序列化失败");
         }
     }

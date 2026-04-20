@@ -1,8 +1,5 @@
 package com.nbwf.modules.aigeneration.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.common.model.AsyncTaskStatus;
@@ -16,6 +13,9 @@ import com.nbwf.modules.jobdraft.model.JobDraftDetailSyncRequest;
 import com.nbwf.modules.jobdraft.service.JobDraftService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 统一任务重试编排服务。
@@ -80,7 +80,7 @@ public class AiGenerationTaskRetryService {
     private JsonNode readTaskRequest(AiGenerationTaskEntity task) {
         try {
             return objectMapper.readTree(task.getRequestJson());
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "任务请求数据解析失败");
         }
     }
@@ -92,7 +92,7 @@ public class AiGenerationTaskRetryService {
         }
         try {
             return objectMapper.treeToValue(requestNode, type);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "任务请求数据解析失败");
         }
     }
