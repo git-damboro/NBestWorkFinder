@@ -139,6 +139,8 @@ public class AiGenerationStreamConsumer extends AbstractStreamConsumer<AiGenerat
         switch (payload.type) {
             case RESUME_JOB_DRAFT -> processResumeJobDraft(payload);
             case INTERVIEW_SESSION_CREATE -> processInterviewSessionCreate(payload);
+            case JOB_DRAFT_PAGE_SYNC, JOB_DRAFT_DETAIL_SYNC ->
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "该任务类型不支持 AI Stream 消费");
         }
     }
 

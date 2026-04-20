@@ -39,4 +39,9 @@ public interface AiGenerationTaskRepository extends JpaRepository<AiGenerationTa
         AiGenerationTaskType type,
         Long sourceId
     );
+
+    /**
+     * 查询用户最近任务列表（V1 固定最近 50 条）。
+     */
+    List<AiGenerationTaskEntity> findTop50ByUserIdOrderByCreatedAtDesc(Long userId);
 }

@@ -3,12 +3,20 @@ package com.nbwf.modules.aigeneration;
 import com.nbwf.common.result.Result;
 import com.nbwf.modules.aigeneration.model.AiGenerationTaskDTO;
 import com.nbwf.modules.aigeneration.model.AiGenerationTaskType;
+import com.nbwf.modules.aigeneration.service.AiGenerationTaskRetryService;
 import com.nbwf.modules.aigeneration.service.AiGenerationTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 通用 AI 生成任务查询接口。
@@ -20,6 +28,16 @@ import org.springframework.web.bind.annotation.*;
 public class AiGenerationTaskController {
 
     private final AiGenerationTaskService aiGenerationTaskService;
+    private final AiGenerationTaskRetryService aiGenerationTaskRetryService;
+
+    /**
+     * 查询最近任务列表（V1 固定最近 50 条）。
+     */
+    @GetMapping
+    @Operation(summary = "查询最近 AI 生成任务列表")
+    public Result<List<AiGenerationTaskDTO>> getRecentTasks(@AuthenticationPrincipal Long userId) {
+        return Result.success(aiGenerationTaskService.listRecentTasks(userId));
+    }
 
     /**
      * 查询单个任务状态。
@@ -29,6 +47,16 @@ public class AiGenerationTaskController {
     public Result<AiGenerationTaskDTO> getTask(@PathVariable String taskId,
                                                @AuthenticationPrincipal Long userId) {
         return Result.success(aiGenerationTaskService.getTask(taskId, userId));
+    }
+
+    /**
+     * 重试失败任务，异步任务重新入队，同步任务直接回放原请求。
+     */
+    @PostMapping("/{taskId}/retry")
+    @Operation(summary = "重试失败的 AI 生成任务")
+    public Result<AiGenerationTaskDTO> retryTask(@PathVariable String taskId,
+                                                 @AuthenticationPrincipal Long userId) {
+        return Result.success(aiGenerationTaskRetryService.retry(taskId, userId));
     }
 
     /**

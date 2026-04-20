@@ -1,5 +1,7 @@
 package com.nbwf.modules.job.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.modules.aigeneration.listener.AiGenerationStreamProducer;
@@ -14,10 +16,14 @@ import com.nbwf.modules.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @Slf4j
@@ -32,6 +38,8 @@ public class JobService {
     private final ResumeJobDraftService resumeJobDraftService;
     private final AiGenerationTaskService aiGenerationTaskService;
     private final AiGenerationStreamProducer aiGenerationStreamProducer;
+    private final PlatformTransactionManager transactionManager;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public JobDetailDTO create(CreateJobRequest req, Long userId) {
@@ -92,8 +100,43 @@ public class JobService {
         jobRepository.delete(job);
     }
 
-    @Transactional
     public JobDetailDTO syncDetail(Long id, JobDetailSyncRequest req, Long userId) {
+        AiGenerationTaskEntity task = aiGenerationTaskService.createTask(
+            userId,
+            AiGenerationTaskType.JOB_DRAFT_DETAIL_SYNC,
+            id,
+            null,
+            buildJobDetailTaskRequestJson(id, req)
+        );
+        return executeDetailSyncTask(task, id, req);
+    }
+
+    public JobDetailDTO retryDetailSyncTask(AiGenerationTaskEntity task,
+                                            Long id,
+                                            JobDetailSyncRequest req) {
+        return executeDetailSyncTask(task, id, req);
+    }
+
+    private JobDetailDTO executeDetailSyncTask(AiGenerationTaskEntity task,
+                                               Long id,
+                                               JobDetailSyncRequest req) {
+        aiGenerationTaskService.markProcessing(task.getTaskId(), task.getUserId());
+        try {
+            JobDetailDTO result = Objects.requireNonNull(
+                new TransactionTemplate(transactionManager).execute(status -> doSyncDetail(id, req, task.getUserId()))
+            );
+            Map<String, Object> resultJson = new LinkedHashMap<>();
+            resultJson.put("targetKind", "JOB");
+            resultJson.put("jobId", result.id());
+            aiGenerationTaskService.markCompleted(task.getTaskId(), task.getUserId(), toJson(resultJson));
+            return result;
+        } catch (RuntimeException e) {
+            aiGenerationTaskService.markFailed(task.getTaskId(), task.getUserId(), toTaskErrorMessage(e));
+            throw e;
+        }
+    }
+
+    private JobDetailDTO doSyncDetail(Long id, JobDetailSyncRequest req, Long userId) {
         JobEntity job = findOrThrow(id, userId);
         boolean descriptionChanged = trimToNull(req.descriptionFull()) != null
             && !req.descriptionFull().equals(job.getDescription());
@@ -119,6 +162,31 @@ public class JobService {
         }
 
         return toDetailDTO(jobRepository.save(job));
+    }
+
+    private String buildJobDetailTaskRequestJson(Long jobId, JobDetailSyncRequest req) {
+        return toJson(Map.of(
+            "v", 1,
+            "targetKind", "JOB",
+            "jobId", jobId,
+            "request", req
+        ));
+    }
+
+    private String toJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "职位任务数据序列化失败");
+        }
+    }
+
+    private String toTaskErrorMessage(RuntimeException e) {
+        String message = e.getMessage();
+        if (message == null || message.isBlank()) {
+            message = e.getClass().getSimpleName();
+        }
+        return message.length() > 500 ? message.substring(0, 500) : message;
     }
 
     public JobMatchDTO match(Long jobId, Long resumeId, Long userId) {

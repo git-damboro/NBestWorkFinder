@@ -37,6 +37,19 @@ public class AiGenerationTaskService {
     }
 
     /**
+     * 创建一个新的任务记录。
+     * 同步型任务每次用户触发都需要独立记录，不能复用运行中任务，否则接口无法稳定返回本次结果。
+     */
+    @Transactional
+    public AiGenerationTaskEntity createTask(Long userId,
+                                             AiGenerationTaskType type,
+                                             Long sourceId,
+                                             Long targetId,
+                                             String requestJson) {
+        return aiGenerationTaskRepository.save(buildPendingTask(userId, type, sourceId, targetId, requestJson));
+    }
+
+    /**
      * 创建任务或复用同类运行中任务，避免短时间重复生成。
      * 这里按任务业务键加本地锁，避免同一应用实例内并发请求重复创建运行中任务。
      */
@@ -117,6 +130,17 @@ public class AiGenerationTaskService {
     }
 
     /**
+     * 查询当前用户最近任务列表（V1 固定最近 50 条）。
+     */
+    @Transactional(readOnly = true)
+    public List<AiGenerationTaskDTO> listRecentTasks(Long userId) {
+        return aiGenerationTaskRepository.findTop50ByUserIdOrderByCreatedAtDesc(userId)
+            .stream()
+            .map(this::toDTO)
+            .toList();
+    }
+
+    /**
      * 标记任务进入后台处理中。
      */
     @Transactional
@@ -150,6 +174,19 @@ public class AiGenerationTaskService {
         task.setErrorMessage(errorMessage);
         task.setCompletedAt(LocalDateTime.now());
         aiGenerationTaskRepository.save(task);
+    }
+
+    /**
+     * 重置任务以便重试（基础能力，不做额外重试规则控制）。
+     */
+    @Transactional
+    public AiGenerationTaskDTO resetForRetry(String taskId, Long userId) {
+        AiGenerationTaskEntity task = findTaskOrThrow(taskId, userId);
+        task.setStatus(AsyncTaskStatus.PENDING);
+        task.setResultJson(null);
+        task.setErrorMessage(null);
+        task.setCompletedAt(null);
+        return toDTO(aiGenerationTaskRepository.save(task));
     }
 
     /**

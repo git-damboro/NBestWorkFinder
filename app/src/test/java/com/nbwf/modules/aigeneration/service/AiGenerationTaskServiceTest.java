@@ -154,6 +154,89 @@ class AiGenerationTaskServiceTest {
     }
 
     @Test
+    void listRecentTasksShouldReturnTaskDtos() {
+        AiGenerationTaskEntity task1 = new AiGenerationTaskEntity();
+        task1.setTaskId("agt_recent_1");
+        task1.setUserId(7L);
+        task1.setType(AiGenerationTaskType.RESUME_JOB_DRAFT);
+        task1.setSourceId(21L);
+        task1.setStatus(AsyncTaskStatus.COMPLETED);
+        task1.setResultJson("{\"drafts\":[1]}");
+        task1.setCreatedAt(LocalDateTime.of(2026, 4, 19, 15, 0));
+        task1.setUpdatedAt(LocalDateTime.of(2026, 4, 19, 15, 1));
+
+        AiGenerationTaskEntity task2 = new AiGenerationTaskEntity();
+        task2.setTaskId("agt_recent_2");
+        task2.setUserId(7L);
+        task2.setType(AiGenerationTaskType.INTERVIEW_SESSION_CREATE);
+        task2.setSourceId(22L);
+        task2.setStatus(AsyncTaskStatus.FAILED);
+        task2.setErrorMessage("timeout");
+        task2.setCreatedAt(LocalDateTime.of(2026, 4, 19, 14, 50));
+        task2.setUpdatedAt(LocalDateTime.of(2026, 4, 19, 14, 51));
+
+        when(aiGenerationTaskRepository.findTop50ByUserIdOrderByCreatedAtDesc(7L))
+            .thenReturn(List.of(task1, task2));
+
+        var actual = aiGenerationTaskService.listRecentTasks(7L);
+
+        assertEquals(2, actual.size());
+        assertEquals("agt_recent_1", actual.get(0).taskId());
+        assertEquals(AsyncTaskStatus.COMPLETED, actual.get(0).status());
+        assertEquals("agt_recent_2", actual.get(1).taskId());
+        assertEquals(AsyncTaskStatus.FAILED, actual.get(1).status());
+        verify(aiGenerationTaskRepository).findTop50ByUserIdOrderByCreatedAtDesc(7L);
+    }
+
+    @Test
+    void listRecentTasksShouldReturnEmptyListWhenNoTaskExists() {
+        when(aiGenerationTaskRepository.findTop50ByUserIdOrderByCreatedAtDesc(7L))
+            .thenReturn(List.of());
+
+        var actual = aiGenerationTaskService.listRecentTasks(7L);
+
+        assertTrue(actual.isEmpty());
+        verify(aiGenerationTaskRepository).findTop50ByUserIdOrderByCreatedAtDesc(7L);
+    }
+
+    @Test
+    void resetForRetryShouldResetTaskToPending() {
+        AiGenerationTaskEntity failedTask = new AiGenerationTaskEntity();
+        failedTask.setTaskId("agt_retry");
+        failedTask.setUserId(7L);
+        failedTask.setType(AiGenerationTaskType.JOB_DRAFT_DETAIL_SYNC);
+        failedTask.setSourceId(21L);
+        failedTask.setStatus(AsyncTaskStatus.FAILED);
+        failedTask.setResultJson("{\"old\":true}");
+        failedTask.setErrorMessage("network error");
+        failedTask.setCompletedAt(LocalDateTime.of(2026, 4, 19, 16, 0));
+
+        when(aiGenerationTaskRepository.findByTaskIdAndUserId("agt_retry", 7L))
+            .thenReturn(Optional.of(failedTask));
+        when(aiGenerationTaskRepository.save(any(AiGenerationTaskEntity.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var actual = aiGenerationTaskService.resetForRetry("agt_retry", 7L);
+
+        assertEquals("agt_retry", actual.taskId());
+        assertEquals(AsyncTaskStatus.PENDING, actual.status());
+        assertNull(actual.resultJson());
+        assertNull(actual.errorMessage());
+        assertNull(actual.completedAt());
+        verify(aiGenerationTaskRepository).findByTaskIdAndUserId("agt_retry", 7L);
+        verify(aiGenerationTaskRepository).save(failedTask);
+    }
+
+    @Test
+    void resetForRetryShouldThrowWhenTaskNotFound() {
+        when(aiGenerationTaskRepository.findByTaskIdAndUserId("agt_missing_retry", 7L))
+            .thenReturn(Optional.empty());
+
+        assertThrows(BusinessException.class, () -> aiGenerationTaskService.resetForRetry("agt_missing_retry", 7L));
+        verify(aiGenerationTaskRepository).findByTaskIdAndUserId("agt_missing_retry", 7L);
+    }
+
+    @Test
     void getTaskShouldReadTaskWithinCurrentUserScope() {
         AiGenerationTaskEntity entity = new AiGenerationTaskEntity();
         entity.setTaskId("agt_scope");

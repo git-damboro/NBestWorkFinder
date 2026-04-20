@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskEntity;
+import com.nbwf.modules.aigeneration.model.AiGenerationTaskType;
+import com.nbwf.modules.aigeneration.service.AiGenerationTaskService;
 import com.nbwf.modules.job.model.JobEntity;
 import com.nbwf.modules.job.model.JobMatchDTO;
 import com.nbwf.modules.job.model.ResumeJobDraftDTO;
@@ -17,7 +20,9 @@ import com.nbwf.modules.resume.model.ResumeEntity;
 import com.nbwf.modules.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -33,6 +38,8 @@ public class JobDraftService {
     private final ResumeJobDraftService resumeJobDraftService;
     private final JobMatchService jobMatchService;
     private final JobDraftFingerprintService fingerprintService;
+    private final AiGenerationTaskService aiGenerationTaskService;
+    private final PlatformTransactionManager transactionManager;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -67,8 +74,42 @@ public class JobDraftService {
         return new JobDraftBatchCreatedDTO(batch.getBatchId(), batch.getStatus(), batch.getTotalCount(), batch.getResumeId(), null, false);
     }
 
-    @Transactional
     public JobDraftBatchCreatedDTO createBatchFromPageSync(CreateDraftBatchFromPageSyncRequest req, Long userId) {
+        AiGenerationTaskEntity task = aiGenerationTaskService.createTask(
+            userId,
+            AiGenerationTaskType.JOB_DRAFT_PAGE_SYNC,
+            req.resumeId() == null ? 0L : req.resumeId(),
+            null,
+            buildPageSyncTaskRequestJson(req)
+        );
+        return executePageSyncTask(task, req);
+    }
+
+    public JobDraftBatchCreatedDTO retryPageSyncTask(AiGenerationTaskEntity task,
+                                                     CreateDraftBatchFromPageSyncRequest req) {
+        return executePageSyncTask(task, req);
+    }
+
+    private JobDraftBatchCreatedDTO executePageSyncTask(AiGenerationTaskEntity task,
+                                                        CreateDraftBatchFromPageSyncRequest req) {
+        aiGenerationTaskService.markProcessing(task.getTaskId(), task.getUserId());
+        try {
+            JobDraftBatchCreatedDTO result = Objects.requireNonNull(
+                new TransactionTemplate(transactionManager).execute(status -> doCreateBatchFromPageSync(req, task.getUserId()))
+            );
+            JobDraftBatchCreatedDTO resultWithTaskId = withTaskId(result, task.getTaskId());
+            aiGenerationTaskService.markCompleted(task.getTaskId(), task.getUserId(), toJson(Map.of(
+                "batchId", result.batchId(),
+                "result", resultWithTaskId
+            )));
+            return resultWithTaskId;
+        } catch (RuntimeException e) {
+            aiGenerationTaskService.markFailed(task.getTaskId(), task.getUserId(), toTaskErrorMessage(e));
+            throw e;
+        }
+    }
+
+    private JobDraftBatchCreatedDTO doCreateBatchFromPageSync(CreateDraftBatchFromPageSyncRequest req, Long userId) {
         if (req.resumeId() != null) {
             resumeRepository.findByIdAndUserId(req.resumeId(), userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND));
@@ -180,8 +221,45 @@ public class JobDraftService {
         return new ImportJobDraftItemsResultDTO(batchId, importedJobIds.size(), skippedCount, importedJobIds);
     }
 
-    @Transactional
     public JobDraftItemDTO syncItemDetail(String draftItemId, JobDraftDetailSyncRequest req, Long userId) {
+        AiGenerationTaskEntity task = aiGenerationTaskService.createTask(
+            userId,
+            AiGenerationTaskType.JOB_DRAFT_DETAIL_SYNC,
+            req.resumeId() == null ? 0L : req.resumeId(),
+            null,
+            buildDraftDetailTaskRequestJson(draftItemId, req)
+        );
+        return executeItemDetailSyncTask(task, draftItemId, req);
+    }
+
+    public JobDraftItemDTO retryItemDetailSyncTask(AiGenerationTaskEntity task,
+                                                   String draftItemId,
+                                                   JobDraftDetailSyncRequest req) {
+        return executeItemDetailSyncTask(task, draftItemId, req);
+    }
+
+    private JobDraftItemDTO executeItemDetailSyncTask(AiGenerationTaskEntity task,
+                                                      String draftItemId,
+                                                      JobDraftDetailSyncRequest req) {
+        aiGenerationTaskService.markProcessing(task.getTaskId(), task.getUserId());
+        try {
+            JobDraftItemDTO result = Objects.requireNonNull(
+                new TransactionTemplate(transactionManager).execute(status -> doSyncItemDetail(draftItemId, req, task.getUserId()))
+            );
+            Map<String, Object> resultJson = new LinkedHashMap<>();
+            resultJson.put("batchId", result.batchId());
+            resultJson.put("draftItemId", result.draftItemId());
+            resultJson.put("importedJobId", result.importedJobId());
+            resultJson.put("targetKind", "DRAFT");
+            aiGenerationTaskService.markCompleted(task.getTaskId(), task.getUserId(), toJson(resultJson));
+            return result;
+        } catch (RuntimeException e) {
+            aiGenerationTaskService.markFailed(task.getTaskId(), task.getUserId(), toTaskErrorMessage(e));
+            throw e;
+        }
+    }
+
+    private JobDraftItemDTO doSyncItemDetail(String draftItemId, JobDraftDetailSyncRequest req, Long userId) {
         JobDraftItemEntity item = itemRepository.findByDraftItemIdAndUserId(draftItemId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "职位草稿不存在"));
         JobDraftBatchEntity batch = findBatchOrThrow(item.getBatchId(), userId);
@@ -191,6 +269,43 @@ public class JobDraftService {
         syncImportedJobIfNeeded(item, userId);
 
         return toItemDTO(itemRepository.save(item));
+    }
+
+    private JobDraftBatchCreatedDTO withTaskId(JobDraftBatchCreatedDTO result, String taskId) {
+        return new JobDraftBatchCreatedDTO(
+            result.batchId(),
+            result.status(),
+            result.totalCount(),
+            result.resumeId(),
+            taskId,
+            result.needResumeSelection()
+        );
+    }
+
+    private String buildPageSyncTaskRequestJson(CreateDraftBatchFromPageSyncRequest req) {
+        return toJson(Map.of(
+            "v", 1,
+            "targetKind", "PAGE_SYNC",
+            "resumeId", req.resumeId() == null ? 0L : req.resumeId(),
+            "request", req
+        ));
+    }
+
+    private String buildDraftDetailTaskRequestJson(String draftItemId, JobDraftDetailSyncRequest req) {
+        return toJson(Map.of(
+            "v", 1,
+            "targetKind", "DRAFT",
+            "draftItemId", draftItemId,
+            "request", req
+        ));
+    }
+
+    private String toTaskErrorMessage(RuntimeException e) {
+        String message = e.getMessage();
+        if (message == null || message.isBlank()) {
+            message = e.getClass().getSimpleName();
+        }
+        return message.length() > 500 ? message.substring(0, 500) : message;
     }
 
     private JobDraftBatchEntity findBatchOrThrow(String batchId, Long userId) {

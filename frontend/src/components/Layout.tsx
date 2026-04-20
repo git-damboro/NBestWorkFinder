@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Database,
   FileStack,
+  ListChecks,
   LogOut,
   MessageSquare,
   Moon,
@@ -45,6 +46,7 @@ export default function Layout() {
         { id: 'upload', path: '/upload', label: '上传简历', icon: Upload, description: 'AI 分析简历' },
         { id: 'resumes', path: '/history', label: '简历库', icon: FileStack, description: '管理所有简历' },
         { id: 'interviews', path: '/interviews', label: '面试记录', icon: Users, description: '查看面试历史' },
+        { id: 'tasks', path: '/tasks', label: '任务中心', icon: ListChecks, description: '跟踪 AI 任务状态' },
         {
           id: 'job-drafts',
           path: '/jobs/drafts',
