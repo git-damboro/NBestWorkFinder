@@ -74,6 +74,19 @@ export interface MatchJobForm {
   resumeId: number;
 }
 
+export interface JobDetailSyncForm {
+  sourcePlatform?: string;
+  externalJobId?: string;
+  sourceUrl?: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  descriptionFull?: string;
+  techTags?: string[];
+}
+
 export interface JobStatusOption {
   value: JobApplicationStatus;
   label: string;

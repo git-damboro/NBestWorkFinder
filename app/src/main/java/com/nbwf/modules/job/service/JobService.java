@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -91,6 +92,35 @@ public class JobService {
         jobRepository.delete(job);
     }
 
+    @Transactional
+    public JobDetailDTO syncDetail(Long id, JobDetailSyncRequest req, Long userId) {
+        JobEntity job = findOrThrow(id, userId);
+        boolean descriptionChanged = trimToNull(req.descriptionFull()) != null
+            && !req.descriptionFull().equals(job.getDescription());
+
+        if (trimToNull(req.title()) != null) job.setTitle(req.title().trim());
+        if (trimToNull(req.company()) != null) job.setCompany(req.company().trim());
+        if (trimToNull(req.descriptionFull()) != null) job.setDescription(req.descriptionFull().trim());
+        if (trimToNull(req.location()) != null) job.setLocation(req.location().trim());
+        if (req.salaryMin() != null) job.setSalaryMin(req.salaryMin());
+        if (req.salaryMax() != null) job.setSalaryMax(req.salaryMax());
+        if (trimToNull(req.sourcePlatform()) != null) job.setSourcePlatform(req.sourcePlatform().trim());
+        if (trimToNull(req.sourceUrl()) != null) job.setSourceUrl(req.sourceUrl().trim());
+        if (trimToNull(req.externalJobId()) != null) job.setExternalJobId(req.externalJobId().trim());
+
+        if (req.techTags() != null && !req.techTags().isEmpty()) {
+            job.setTechTags(joinTags(sanitizeTags(req.techTags())));
+        } else if (descriptionChanged) {
+            job.setTechTags(joinTags(extractTagsSafely(job.getTitle(), job.getDescription())));
+        }
+
+        if (descriptionChanged) {
+            job.setJdCompleteness("COMPLETED");
+        }
+
+        return toDetailDTO(jobRepository.save(job));
+    }
+
     public JobMatchDTO match(Long jobId, Long resumeId, Long userId) {
         JobEntity job = findOrThrow(jobId, userId);
         ResumeEntity resume = resumeRepository.findByIdAndUserId(resumeId, userId)
@@ -162,6 +192,23 @@ public class JobService {
 
     private String joinTags(List<String> tags) {
         return tags.isEmpty() ? null : String.join(",", tags);
+    }
+
+    private List<String> sanitizeTags(List<String> tags) {
+        if (tags == null) return List.of();
+        return tags.stream()
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(tag -> !tag.isEmpty())
+            .distinct()
+            .limit(12)
+            .toList();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private List<String> splitTags(String techTags) {

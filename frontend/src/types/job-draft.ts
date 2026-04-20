@@ -102,3 +102,22 @@ export interface ImportJobDraftItemsResult {
   importedJobIds: number[];
 }
 
+export interface JobDraftDetailSyncForm {
+  resumeId?: number;
+  externalJobId?: string;
+  sourceUrl?: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  salaryTextRaw?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  experienceTextRaw?: string;
+  educationTextRaw?: string;
+  descriptionPreview?: string;
+  descriptionFull?: string;
+  techTags?: string[];
+  benefits?: string[];
+  recruiterName?: string;
+  rawPayload?: Record<string, unknown>;
+}

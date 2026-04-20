@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nbwf.common.exception.BusinessException;
 import com.nbwf.common.exception.ErrorCode;
 import com.nbwf.modules.job.model.JobEntity;
+import com.nbwf.modules.job.model.JobMatchDTO;
 import com.nbwf.modules.job.model.ResumeJobDraftDTO;
 import com.nbwf.modules.job.repository.JobRepository;
+import com.nbwf.modules.job.service.JobMatchService;
 import com.nbwf.modules.job.service.ResumeJobDraftService;
 import com.nbwf.modules.jobdraft.model.*;
 import com.nbwf.modules.jobdraft.repository.JobDraftBatchRepository;
@@ -29,6 +31,7 @@ public class JobDraftService {
     private final ResumeRepository resumeRepository;
     private final JobRepository jobRepository;
     private final ResumeJobDraftService resumeJobDraftService;
+    private final JobMatchService jobMatchService;
     private final JobDraftFingerprintService fingerprintService;
     private final ObjectMapper objectMapper;
 
@@ -177,9 +180,97 @@ public class JobDraftService {
         return new ImportJobDraftItemsResultDTO(batchId, importedJobIds.size(), skippedCount, importedJobIds);
     }
 
+    @Transactional
+    public JobDraftItemDTO syncItemDetail(String draftItemId, JobDraftDetailSyncRequest req, Long userId) {
+        JobDraftItemEntity item = itemRepository.findByDraftItemIdAndUserId(draftItemId, userId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "职位草稿不存在"));
+        JobDraftBatchEntity batch = findBatchOrThrow(item.getBatchId(), userId);
+
+        applyDetailSync(item, req);
+        applyPreciseMatchIfPossible(item, batch, req, userId);
+        syncImportedJobIfNeeded(item, userId);
+
+        return toItemDTO(itemRepository.save(item));
+    }
+
     private JobDraftBatchEntity findBatchOrThrow(String batchId, Long userId) {
         return batchRepository.findByBatchIdAndUserId(batchId, userId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "职位草稿批次不存在"));
+    }
+
+    private void applyDetailSync(JobDraftItemEntity item, JobDraftDetailSyncRequest req) {
+        if (trimToNull(req.title()) != null) item.setTitle(req.title().trim());
+        if (trimToNull(req.company()) != null) item.setCompany(req.company().trim());
+        if (trimToNull(req.externalJobId()) != null) item.setExternalJobId(req.externalJobId().trim());
+        if (trimToNull(req.sourceUrl()) != null) item.setSourceUrl(req.sourceUrl().trim());
+        if (trimToNull(req.location()) != null) item.setLocation(req.location().trim());
+        if (trimToNull(req.salaryTextRaw()) != null) item.setSalaryTextRaw(req.salaryTextRaw().trim());
+        if (req.salaryMin() != null) item.setSalaryMin(req.salaryMin());
+        if (req.salaryMax() != null) item.setSalaryMax(req.salaryMax());
+        if (trimToNull(req.experienceTextRaw()) != null) item.setExperienceTextRaw(req.experienceTextRaw().trim());
+        if (trimToNull(req.educationTextRaw()) != null) item.setEducationTextRaw(req.educationTextRaw().trim());
+        if (trimToNull(req.descriptionPreview()) != null) item.setDescriptionPreview(req.descriptionPreview().trim());
+        if (trimToNull(req.descriptionFull()) != null) item.setDescriptionFull(req.descriptionFull().trim());
+        if (req.techTags() != null) item.setTechTagsJson(toJson(sanitizeTags(req.techTags())));
+        if (req.benefits() != null) item.setBenefitsJson(toJson(sanitizeTags(req.benefits())));
+        if (trimToNull(req.recruiterName()) != null) item.setRecruiterName(req.recruiterName().trim());
+        if (req.rawPayload() != null) item.setRawPayloadJson(toJson(req.rawPayload()));
+
+        item.setDetailSyncStatus(trimToNull(item.getDescriptionFull()) != null
+            ? JobDraftDetailSyncStatus.COMPLETED
+            : JobDraftDetailSyncStatus.PARTIAL);
+    }
+
+    private void applyPreciseMatchIfPossible(JobDraftItemEntity item,
+                                             JobDraftBatchEntity batch,
+                                             JobDraftDetailSyncRequest req,
+                                             Long userId) {
+        String description = trimToNull(item.getDescriptionFull());
+        Long resumeId = req.resumeId() != null ? req.resumeId() : batch.getResumeId();
+        if (description == null || resumeId == null) {
+            return;
+        }
+
+        ResumeEntity resume = resumeRepository.findByIdAndUserId(resumeId, userId).orElse(null);
+        if (resume == null || trimToNull(resume.getResumeText()) == null) {
+            return;
+        }
+
+        try {
+            JobMatchDTO match = jobMatchService.analyze(resume.getResumeText(), item.getTitle(), description);
+            item.setPreciseMatchScore(match.overallScore());
+            item.setMatchSummary(match.summary());
+            item.setOpenerText(buildOpenerText(item, match));
+        } catch (Exception ignored) {
+            item.setMatchSummary("JD 已补全，精匹配分析暂未完成，可稍后重试。");
+        }
+    }
+
+    private void syncImportedJobIfNeeded(JobDraftItemEntity item, Long userId) {
+        if (!item.isImported() || item.getImportedJobId() == null) {
+            return;
+        }
+
+        jobRepository.findByIdAndUserId(item.getImportedJobId(), userId).ifPresent(job -> {
+            job.setTitle(item.getTitle());
+            job.setCompany(item.getCompany());
+            job.setDescription(resolveDescription(item));
+            job.setLocation(item.getLocation());
+            job.setSalaryMin(item.getSalaryMin());
+            job.setSalaryMax(item.getSalaryMax());
+            job.setTechTags(joinList(fromJsonList(item.getTechTagsJson())));
+            job.setSourceUrl(item.getSourceUrl());
+            job.setExternalJobId(item.getExternalJobId());
+            job.setJdCompleteness(item.getDetailSyncStatus().name());
+            jobRepository.save(job);
+        });
+    }
+
+    private String buildOpenerText(JobDraftItemEntity item, JobMatchDTO match) {
+        String summary = trimToNull(match.summary());
+        String skill = match.matchedSkills().isEmpty() ? "相关技术栈" : match.matchedSkills().get(0);
+        return "您好，我关注到贵司的「" + item.getTitle() + "」岗位。我的经历与"
+            + skill + "方向较匹配，" + (summary == null ? "希望有机会进一步沟通。" : summary);
     }
 
     private JobDraftItemEntity buildResumeGeneratedItem(JobDraftBatchEntity batch, ResumeJobDraftDTO draft, Long userId) {
@@ -350,6 +441,19 @@ public class JobDraftService {
 
     private String joinList(List<String> values) {
         return values == null || values.isEmpty() ? null : String.join(",", values);
+    }
+
+    private List<String> sanitizeTags(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        return values.stream()
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(value -> !value.isEmpty())
+            .distinct()
+            .limit(12)
+            .toList();
     }
 
     private List<String> fromJsonList(String value) {

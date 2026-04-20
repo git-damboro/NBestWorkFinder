@@ -48,6 +48,14 @@ public class JobDraftController {
         return Result.success(jobDraftService.getItems(batchId, userId));
     }
 
+    @Operation(summary = "同步补全职位草稿详情 JD")
+    @PostMapping("/items/{draftItemId}/detail-sync")
+    public Result<JobDraftItemDTO> syncItemDetail(@PathVariable String draftItemId,
+                                                  @Valid @RequestBody JobDraftDetailSyncRequest req,
+                                                  @AuthenticationPrincipal Long userId) {
+        return Result.success(jobDraftService.syncItemDetail(draftItemId, req, userId));
+    }
+
     @Operation(summary = "查询最近职位草稿批次")
     @GetMapping("/batches/latest")
     public Result<JobDraftBatchDTO> getLatestBatch(@AuthenticationPrincipal Long userId) {

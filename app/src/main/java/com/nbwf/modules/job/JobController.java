@@ -53,6 +53,14 @@ public class JobController {
         return Result.success(jobService.update(id, req, userId));
     }
 
+    @Operation(summary = "同步补全职位详情 JD")
+    @PostMapping("/{id}/detail-sync")
+    public Result<JobDetailDTO> syncDetail(@PathVariable Long id,
+                                           @Valid @RequestBody JobDetailSyncRequest req,
+                                           @AuthenticationPrincipal Long userId) {
+        return Result.success(jobService.syncDetail(id, req, userId));
+    }
+
     @Operation(summary = "删除职位")
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id,
