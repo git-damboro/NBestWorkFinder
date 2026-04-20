@@ -16,4 +16,8 @@ public interface JobRepository extends JpaRepository<JobEntity, Long> {
     Optional<JobEntity> findByIdAndUserId(Long id, Long userId);
 
     boolean existsByIdAndUserId(Long id, Long userId);
+
+    boolean existsByUserIdAndSourceFingerprint(Long userId, String sourceFingerprint);
+
+    Optional<JobEntity> findFirstByUserIdAndSourceFingerprint(Long userId, String sourceFingerprint);
 }

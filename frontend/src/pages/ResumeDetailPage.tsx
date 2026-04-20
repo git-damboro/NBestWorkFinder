@@ -295,15 +295,15 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
     setGeneratingJobDrafts(true);
     setJobDraftError(null);
     setJobDrafts([]);
-    setJobDraftDialogOpen(true);
 
     try {
-      const task = await jobApi.createDraftTaskFromResume(resumeId);
-      applyJobDraftTask(task);
+      const batch = await jobApi.createDraftBatchFromResume(resumeId);
+      navigate(`/jobs/drafts?batchId=${encodeURIComponent(batch.batchId)}`);
     } catch (error) {
       setJobDrafts([]);
       setJobDraftError(getErrorMessage(error));
       setJobDraftTaskId(null);
+    } finally {
       setGeneratingJobDrafts(false);
     }
   };

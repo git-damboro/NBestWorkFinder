@@ -1,5 +1,6 @@
 import { request } from './request';
 import type { AiGenerationTask } from '../types/ai-generation-task';
+import type { JobDraftBatchCreated } from '../types/job-draft';
 import type {
   CreateJobForm,
   JobApplicationStatus,
@@ -47,6 +48,13 @@ export const jobApi = {
    */
   async createDraftTaskFromResume(resumeId: number): Promise<AiGenerationTask> {
     return request.post<AiGenerationTask>(`/api/jobs/draft-tasks/from-resume/${resumeId}`);
+  },
+
+  /**
+   * 创建职位草稿池批次（兼容入口）
+   */
+  async createDraftBatchFromResume(resumeId: number): Promise<JobDraftBatchCreated> {
+    return request.post<JobDraftBatchCreated>(`/api/jobs/draft-batches/from-resume/${resumeId}`);
   },
 
   /**

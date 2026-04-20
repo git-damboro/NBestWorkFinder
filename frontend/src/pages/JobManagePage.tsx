@@ -6,6 +6,7 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  ClipboardList,
   Edit3,
   Loader2,
   MapPin,
@@ -435,6 +436,14 @@ export default function JobManagePage() {
           >
             <RefreshCw className="h-4 w-4" />
             刷新列表
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/jobs/drafts')}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            <ClipboardList className="h-4 w-4" />
+            查看职位草稿
           </button>
           <button
             type="button"

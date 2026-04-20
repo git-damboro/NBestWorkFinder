@@ -1,12 +1,14 @@
 package com.nbwf.modules.job.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "jobs", indexes = {
     @Index(name = "idx_job_user_id", columnList = "user_id"),
-    @Index(name = "idx_job_application_status", columnList = "application_status")
+    @Index(name = "idx_job_application_status", columnList = "application_status"),
+    @Index(name = "idx_job_source_fingerprint", columnList = "source_fingerprint")
 })
 public class JobEntity {
 
@@ -23,7 +25,6 @@ public class JobEntity {
     @Column(nullable = false, length = 200)
     private String company;
 
-    // 用户粘贴的原始 JD 文本
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
@@ -34,18 +35,33 @@ public class JobEntity {
 
     private Integer salaryMax;
 
-    // AI 提取的技术标签，逗号分隔
     @Column(columnDefinition = "TEXT")
     private String techTags;
 
-    // 求职进展状态
     @Enumerated(EnumType.STRING)
     @Column(name = "application_status", nullable = false, length = 20)
     private JobApplicationStatus applicationStatus = JobApplicationStatus.SAVED;
 
-    // 用户备注
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "source_platform", length = 40)
+    private String sourcePlatform;
+
+    @Column(name = "source_url", columnDefinition = "TEXT")
+    private String sourceUrl;
+
+    @Column(name = "external_job_id", length = 120)
+    private String externalJobId;
+
+    @Column(name = "source_fingerprint", length = 160)
+    private String sourceFingerprint;
+
+    @Column(name = "draft_item_id", length = 40)
+    private String draftItemId;
+
+    @Column(name = "jd_completeness", length = 40)
+    private String jdCompleteness;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
@@ -95,6 +111,24 @@ public class JobEntity {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getSourcePlatform() { return sourcePlatform; }
+    public void setSourcePlatform(String sourcePlatform) { this.sourcePlatform = sourcePlatform; }
+
+    public String getSourceUrl() { return sourceUrl; }
+    public void setSourceUrl(String sourceUrl) { this.sourceUrl = sourceUrl; }
+
+    public String getExternalJobId() { return externalJobId; }
+    public void setExternalJobId(String externalJobId) { this.externalJobId = externalJobId; }
+
+    public String getSourceFingerprint() { return sourceFingerprint; }
+    public void setSourceFingerprint(String sourceFingerprint) { this.sourceFingerprint = sourceFingerprint; }
+
+    public String getDraftItemId() { return draftItemId; }
+    public void setDraftItemId(String draftItemId) { this.draftItemId = draftItemId; }
+
+    public String getJdCompleteness() { return jdCompleteness; }
+    public void setJdCompleteness(String jdCompleteness) { this.jdCompleteness = jdCompleteness; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

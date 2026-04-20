@@ -7,4 +7,5 @@ export { interviewApi } from './interview';
 export { knowledgeBaseApi } from './knowledgebase';
 export { historyApi } from './history';
 export { jobApi } from './jobs';
+export { jobDraftApi } from './jobDrafts';
 export { aiGenerationTaskApi } from './aiGenerationTasks';
