@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NBWF 求职助手</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header class="header">
+        <h1>NBWF 求职助手</h1>
+        <button id="refreshButton" class="ghost-button" type="button">刷新</button>
+      </header>
+
+      <section class="panel">
+        <div class="panel-title">当前状态</div>
+        <div id="statusBadge" class="badge badge-neutral">初始化中</div>
+        <p id="statusText" class="muted">正在读取扩展上下文…</p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">简历上下文</div>
+        <label class="field">
+          <span>用于匹配的简历</span>
+          <select id="resumeSelect"></select>
+        </label>
+        <p class="hint">
+          扩展会优先使用这里选择的简历；若未选择，则沿用最近草稿批次绑定的简历。
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">快捷操作</div>
+        <div class="actions">
+          <button id="syncListButton" type="button" class="primary-button">同步当前页职位</button>
+          <button id="syncDetailButton" type="button" class="secondary-button">补全当前 JD</button>
+          <button id="openDraftButton" type="button" class="secondary-button">打开职位草稿</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">最近任务</div>
+        <div id="taskBox" class="task-box">
+          <div id="taskTitle" class="task-title">暂无后台任务</div>
+          <div id="taskMeta" class="task-meta">等待执行</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">使用说明</div>
+        <ol class="steps">
+          <li>先打开 NBWF 系统页面并登录一次，扩展会自动同步登录态。</li>
+          <li>在 BOSS 列表页点击“同步当前页职位”，生成职位草稿批次。</li>
+          <li>打开某个职位详情页后点击“补全当前 JD”，补全详细信息与匹配结果。</li>
+        </ol>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
