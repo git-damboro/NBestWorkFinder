@@ -1,14 +1,14 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { clearAuthSession, getAccessToken } from '../auth/auth-storage';
 
-/**
- * 后端统一响应结构
- */
-interface Result<T = unknown> {
+export interface Result<T = unknown> {
   code: number;
   message: string;
   data: T;
 }
+
+const AUTH_ERROR_CODES = new Set([401, 403, 9004, 9005]);
+export const SESSION_EXPIRED_MESSAGE = '登录状态已失效，请重新登录';
 
 const baseURL = import.meta.env.PROD ? '' : 'http://localhost:8080';
 
@@ -17,11 +17,76 @@ const instance: AxiosInstance = axios.create({
   timeout: 60000,
 });
 
-/**
- * 请求拦截器
- *
- * 登录后所有业务请求都自动携带 Bearer Token，避免页面层重复处理认证头。
- */
+function hasCodeProperty(value: object): value is object & { code: unknown } {
+  return 'code' in value;
+}
+
+export function isResult(value: unknown): value is Result {
+  return value !== null && typeof value === 'object' && hasCodeProperty(value);
+}
+
+export function isAuthErrorCode(code: unknown): boolean {
+  return typeof code === 'number' && AUTH_ERROR_CODES.has(code);
+}
+
+export function getResultMessage(value: unknown, fallback = '请求失败'): string {
+  if (isResult(value) && typeof value.message === 'string' && value.message.trim()) {
+    return value.message;
+  }
+  return fallback;
+}
+
+function parseJsonText(raw: string): unknown | null {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function getHeaderValue(header: string | string[] | undefined): string | undefined {
+  if (Array.isArray(header)) {
+    return header[0];
+  }
+  return header;
+}
+
+async function parseBlobResult(blob: Blob, contentType?: string): Promise<unknown | null> {
+  if (!contentType?.includes('application/json')) {
+    return null;
+  }
+  return parseJsonText(await blob.text());
+}
+
+export function handleAuthExpired(message = SESSION_EXPIRED_MESSAGE): Error {
+  clearAuthSession();
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.replace('/login');
+  }
+  return new Error(message);
+}
+
+export function buildAuthHeaders(headers: HeadersInit = {}): Headers {
+  const nextHeaders = new Headers(headers);
+  const token = getAccessToken();
+  if (token) {
+    nextHeaders.set('Authorization', `Bearer ${token}`);
+  }
+  return nextHeaders;
+}
+
+export async function parseResponseJsonSafely(response: Response): Promise<unknown | null> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return null;
+  }
+  try {
+    return await response.clone().json();
+  } catch {
+    return null;
+  }
+}
+
 instance.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) {
@@ -30,57 +95,54 @@ instance.interceptors.request.use((config) => {
   return config;
 });
 
-/**
- * 响应拦截器
- * 
- * 后端约定：所有响应都是 HTTP 200 + Result
- * - code === 200 → 成功，返回 data
- * - code !== 200 → 失败，直接显示 message
- */
 instance.interceptors.response.use(
   (response) => {
-    const result = response.data as Result;
-    
-    // 检查是否是 Result 格式
-    if (result && typeof result === 'object' && 'code' in result) {
+    if (response.config.responseType === 'blob') {
+      return response;
+    }
+
+    const result = response.data as unknown;
+    if (isResult(result)) {
       if (result.code === 200) {
-        // 成功：返回 data
         response.data = result.data;
         return response;
       }
-      // 失败：直接抛出 message
-      return Promise.reject(new Error(result.message || '请求失败'));
+      if (isAuthErrorCode(result.code)) {
+        return Promise.reject(handleAuthExpired(getResultMessage(result, SESSION_EXPIRED_MESSAGE)));
+      }
+      return Promise.reject(new Error(getResultMessage(result)));
     }
-    
-    // 非 Result 格式，直接返回
+
     return response;
   },
-  (error) => {
-    // 有响应的情况：后端返回了结果（即使是错误）
+  async (error: AxiosError<unknown>) => {
     if (error.response) {
-      const { data } = error.response;
+      const { data, headers, status } = error.response;
 
-      // 访问令牌失效或缺失时，立即清空本地登录态并回到登录页
-      if (error.response.status === 401) {
-        clearAuthSession();
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+      if (status === 401 || status === 403) {
+        return Promise.reject(handleAuthExpired());
+      }
+
+      if (isResult(data)) {
+        if (isAuthErrorCode(data.code)) {
+          return Promise.reject(handleAuthExpired(getResultMessage(data, SESSION_EXPIRED_MESSAGE)));
         }
-        return Promise.reject(new Error('登录状态已失效，请重新登录'));
+        return Promise.reject(new Error(getResultMessage(data)));
       }
 
-      // 尝试解析 Result 格式
-      if (data && typeof data === 'object' && 'code' in data && 'message' in data) {
-        const result = data as Result;
-        return Promise.reject(new Error(result.message || '请求失败'));
+      if (data instanceof Blob) {
+        const blobResult = await parseBlobResult(data, getHeaderValue(headers['content-type']));
+        if (isResult(blobResult)) {
+          if (isAuthErrorCode(blobResult.code)) {
+            return Promise.reject(handleAuthExpired(getResultMessage(blobResult, SESSION_EXPIRED_MESSAGE)));
+          }
+          return Promise.reject(new Error(getResultMessage(blobResult)));
+        }
       }
-      // 响应格式不对
+
       return Promise.reject(new Error('请求失败，请重试'));
     }
 
-    // 没有响应的情况：真正的网络错误或连接被重置
-    // 对于文件上传，可能是网络超时或连接中断，但不一定是文件大小问题
-    // 让后端返回真实的错误信息，而不是在这里假设
     const config = error.config;
     const isUpload = config && (
       config.url?.includes('/upload') ||
@@ -88,12 +150,9 @@ instance.interceptors.response.use(
     );
 
     if (isUpload) {
-      // 文件上传失败且没有响应，可能是网络超时或连接中断
-      // 不直接假设是文件大小问题，返回更通用的错误信息
       return Promise.reject(new Error('上传失败，可能是网络超时或连接中断，请重试'));
     }
 
-    // 其他网络错误
     return Promise.reject(new Error('网络连接失败，请检查网络'));
   }
 );
@@ -115,9 +174,6 @@ export const request = {
     return instance.delete(url, config).then(res => res.data);
   },
 
-  /**
-   * 文件上传
-   */
   upload<T>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
     return instance.post(url, formData, {
       timeout: 120000,
@@ -126,17 +182,31 @@ export const request = {
     }).then(res => res.data);
   },
 
-  /**
-   * 获取原始实例（用于特殊场景如下载 Blob）
-   */
   getInstance(): AxiosInstance {
     return instance;
   },
 };
 
-/**
- * 获取错误信息
- */
+export async function downloadBlob(url: string, config?: AxiosRequestConfig): Promise<Blob> {
+  const response = await instance.get<Blob>(url, {
+    ...config,
+    responseType: 'blob',
+  });
+  const contentType = getHeaderValue(response.headers['content-type']);
+  const blobResult = await parseBlobResult(response.data, contentType);
+
+  if (isResult(blobResult)) {
+    if (isAuthErrorCode(blobResult.code)) {
+      throw handleAuthExpired(getResultMessage(blobResult, SESSION_EXPIRED_MESSAGE));
+    }
+    if (blobResult.code !== 200) {
+      throw new Error(getResultMessage(blobResult, '下载失败'));
+    }
+  }
+
+  return response.data;
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
