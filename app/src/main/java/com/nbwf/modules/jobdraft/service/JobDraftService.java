@@ -31,6 +31,14 @@ import java.util.*;
 @RequiredArgsConstructor
 public class JobDraftService {
 
+    private static final List<JobDraftBatchStatus> RECOVERABLE_BATCH_STATUSES = List.of(
+        JobDraftBatchStatus.CREATED,
+        JobDraftBatchStatus.ANALYZING,
+        JobDraftBatchStatus.READY,
+        JobDraftBatchStatus.PARTIAL_IMPORTED,
+        JobDraftBatchStatus.FAILED
+    );
+
     private final JobDraftBatchRepository batchRepository;
     private final JobDraftItemRepository itemRepository;
     private final ResumeRepository resumeRepository;
@@ -154,7 +162,11 @@ public class JobDraftService {
 
     @Transactional(readOnly = true)
     public JobDraftBatchDTO getLatestBatch(Long userId) {
-        return batchRepository.findFirstByUserIdOrderByUpdatedAtDesc(userId)
+        return batchRepository.findLatestRecoverableBatch(
+                userId,
+                RECOVERABLE_BATCH_STATUSES,
+                LocalDateTime.now()
+            )
             .map(this::toBatchDTO)
             .orElse(null);
     }
