@@ -8,6 +8,11 @@ const STORAGE_KEYS = {
   selectedResumeId: 'nbwf_extension_selected_resume_id',
 };
 
+const ALLOWED_APP_ORIGINS = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]);
+
 chrome.runtime.onInstalled.addListener(() => {
   void ensureStorageDefaults();
 });
@@ -39,6 +44,8 @@ async function handleMessage(message, sender) {
       return syncDetailPageJob(message.tabId, message.resumeId);
     case 'NBWF_OPEN_DRAFT_PAGE':
       return openDraftPage(message.batchId);
+    case 'NBWF_RESTORE_LAST_BATCH':
+      return restoreLastBatch();
     default:
       throw new Error('未知消息类型');
   }
@@ -69,6 +76,10 @@ async function ensureStorageDefaults() {
 }
 
 async function upsertAuthSession(payload, sender) {
+  if (!isAllowedAppSender(sender?.url)) {
+    return { synced: false, ignored: true };
+  }
+
   if (!payload || !payload.accessToken || !payload.refreshToken) {
     await chrome.storage.local.set({ [STORAGE_KEYS.auth]: null });
     return { synced: false };
@@ -128,16 +139,22 @@ async function resolveTab(tabId, explicitUrl) {
 }
 
 function detectBossPageType(url) {
-  if (!url) {
+  const parsed = safeParseUrl(url);
+  if (!parsed) {
     return 'unknown';
   }
-  if (!url.includes('zhipin.com')) {
+  if (!isBossHost(parsed.hostname)) {
     return 'unsupported';
   }
-  if (url.includes('/job_detail/')) {
+  if (parsed.pathname.includes('/job_detail/')) {
     return 'detail';
   }
-  if (url.includes('/web/geek/job') || url.includes('/web/geek/jobs') || url.includes('/joblist')) {
+  if (
+    parsed.pathname.includes('/web/geek/job')
+    || parsed.pathname.includes('/web/geek/jobs')
+    || parsed.pathname.includes('/web/geek/recommend')
+    || parsed.pathname.includes('/joblist')
+  ) {
     return 'list';
   }
   return 'boss';
@@ -155,9 +172,7 @@ async function setSelectedResumeId(resumeId) {
 
 async function syncListPageJobs(tabId, resumeId) {
   try {
-    if (!tabId) {
-      throw new Error('未找到当前标签页');
-    }
+    const tab = await requireTabByPageType(tabId, 'list');
 
     await setLastTask({
       type: 'PAGE_SYNC',
@@ -165,7 +180,7 @@ async function syncListPageJobs(tabId, resumeId) {
       message: '正在同步当前页职位，请稍候…',
     });
 
-    const pageData = await sendTabMessage(tabId, { type: 'NBWF_EXTRACT_LIST_PAGE' });
+    const pageData = await sendTabMessage(tab.id, { type: 'NBWF_EXTRACT_LIST_PAGE' });
     if (!pageData?.jobs?.length) {
       throw new Error('当前页面未识别到可同步的职位卡片');
     }
@@ -189,6 +204,8 @@ async function syncListPageJobs(tabId, resumeId) {
 
     const lastBatch = {
       batchId: batch.batchId,
+      batchStatus: batch.status ?? null,
+      totalCount: batch.totalCount ?? (Array.isArray(items) ? items.length : 0),
       resumeId: payload.resumeId ?? null,
       sourcePlatform: 'BOSS',
       sourcePageUrl: payload.sourcePageUrl ?? null,
@@ -227,9 +244,7 @@ async function syncListPageJobs(tabId, resumeId) {
 
 async function syncDetailPageJob(tabId, resumeId) {
   try {
-    if (!tabId) {
-      throw new Error('未找到当前标签页');
-    }
+    const tab = await requireTabByPageType(tabId, 'detail');
 
     await setLastTask({
       type: 'DETAIL_SYNC',
@@ -237,7 +252,7 @@ async function syncDetailPageJob(tabId, resumeId) {
       message: '正在补全当前职位 JD，请稍候…',
     });
 
-    const detail = await sendTabMessage(tabId, { type: 'NBWF_EXTRACT_DETAIL_PAGE' });
+    const detail = await sendTabMessage(tab.id, { type: 'NBWF_EXTRACT_DETAIL_PAGE' });
     if (!detail?.title || !detail?.company) {
       throw new Error('当前页面未识别到职位详情，请打开具体职位详情页后重试');
     }
@@ -293,24 +308,10 @@ async function resolveMatchingDraft(detail) {
     return cachedMatch;
   }
 
-  const latestBatch = await apiRequest('/api/job-drafts/batches/latest', { method: 'GET' });
-  if (!latestBatch?.batchId) {
+  const lastBatchCache = await restoreLastBatch();
+  if (!lastBatchCache) {
     return null;
   }
-
-  const items = await apiRequest(`/api/job-drafts/batches/${encodeURIComponent(latestBatch.batchId)}/items`, {
-    method: 'GET',
-  });
-  const lastBatchCache = {
-    batchId: latestBatch.batchId,
-    resumeId: latestBatch.resumeId ?? null,
-    sourcePlatform: latestBatch.sourcePlatform ?? 'BOSS',
-    sourcePageUrl: latestBatch.sourcePageUrl ?? null,
-    sourcePageTitle: latestBatch.sourcePageTitle ?? null,
-    items: Array.isArray(items) ? items.map(toCachedDraftItem) : [],
-    updatedAt: new Date().toISOString(),
-  };
-  await chrome.storage.local.set({ [STORAGE_KEYS.lastBatch]: lastBatchCache });
   return findDraftItemMatch(lastBatchCache, detail);
 }
 
@@ -382,6 +383,7 @@ function toCachedDraftItem(item) {
     company: item.company,
     detailSyncStatus: item.detailSyncStatus ?? 'UNSYNCED',
     preciseMatchScore: item.preciseMatchScore ?? null,
+    matchSummary: item.matchSummary ?? null,
   };
 }
 
@@ -413,7 +415,11 @@ async function openDraftPage(batchId) {
     STORAGE_KEYS.lastBatch,
   ]);
 
-  const targetBatchId = batchId || lastBatch?.batchId;
+  let targetBatchId = batchId || lastBatch?.batchId;
+  if (!targetBatchId && auth?.accessToken) {
+    const restoredBatch = await restoreLastBatch();
+    targetBatchId = restoredBatch?.batchId ?? null;
+  }
   if (!targetBatchId) {
     throw new Error('当前还没有可打开的职位草稿批次');
   }
@@ -422,6 +428,31 @@ async function openDraftPage(batchId) {
   const targetUrl = `${appBase.replace(/\/$/, '')}/jobs/drafts?batchId=${encodeURIComponent(targetBatchId)}`;
   await chrome.tabs.create({ url: targetUrl });
   return { batchId: targetBatchId, url: targetUrl };
+}
+
+async function restoreLastBatch() {
+  const latestBatch = await apiRequest('/api/job-drafts/batches/latest', { method: 'GET' });
+  if (!latestBatch?.batchId) {
+    await chrome.storage.local.set({ [STORAGE_KEYS.lastBatch]: null });
+    return null;
+  }
+
+  const items = await apiRequest(`/api/job-drafts/batches/${encodeURIComponent(latestBatch.batchId)}/items`, {
+    method: 'GET',
+  });
+  const lastBatchCache = {
+    batchId: latestBatch.batchId,
+    batchStatus: latestBatch.status ?? null,
+    totalCount: latestBatch.totalCount ?? (Array.isArray(items) ? items.length : 0),
+    resumeId: latestBatch.resumeId ?? null,
+    sourcePlatform: latestBatch.sourcePlatform ?? 'BOSS',
+    sourcePageUrl: latestBatch.sourcePageUrl ?? null,
+    sourcePageTitle: latestBatch.sourcePageTitle ?? null,
+    items: Array.isArray(items) ? items.map(toCachedDraftItem) : [],
+    updatedAt: latestBatch.updatedAt ?? new Date().toISOString(),
+  };
+  await chrome.storage.local.set({ [STORAGE_KEYS.lastBatch]: lastBatchCache });
+  return lastBatchCache;
 }
 
 async function setLastTask(task) {
@@ -501,7 +532,14 @@ async function sendTabMessage(tabId, message) {
     }
     return response;
   } catch (error) {
-    if (error instanceof Error && error.message) {
+    const messageText = error instanceof Error ? error.message : '';
+    if (
+      messageText.includes('Receiving end does not exist')
+      || messageText.includes('Could not establish connection')
+    ) {
+      throw new Error('当前页面未注入扩展脚本，请刷新 BOSS 页面后重试。');
+    }
+    if (messageText) {
       throw error;
     }
     throw new Error('当前页面未注入扩展脚本，请确认你正在 BOSS 职位列表页或详情页');
@@ -510,4 +548,42 @@ async function sendTabMessage(tabId, message) {
 
 function normalizeResumeId(resumeId) {
   return typeof resumeId === 'number' && Number.isFinite(resumeId) ? resumeId : null;
+}
+
+function safeParseUrl(url) {
+  if (!url) {
+    return null;
+  }
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
+function isBossHost(hostname) {
+  return hostname === 'zhipin.com' || hostname === 'www.zhipin.com' || hostname.endsWith('.zhipin.com');
+}
+
+function isAllowedAppSender(url) {
+  const parsed = safeParseUrl(url);
+  return Boolean(parsed && ALLOWED_APP_ORIGINS.has(parsed.origin));
+}
+
+async function requireTabByPageType(tabId, expectedType) {
+  if (!tabId) {
+    throw new Error('未找到当前标签页');
+  }
+
+  const tab = await chrome.tabs.get(tabId);
+  const pageType = detectBossPageType(tab?.url);
+  if (pageType !== expectedType) {
+    if (expectedType === 'list') {
+      throw new Error('请先打开 BOSS 职位列表页再执行同步。');
+    }
+    if (expectedType === 'detail') {
+      throw new Error('请先打开具体职位详情页后再补全当前 JD。');
+    }
+  }
+  return tab;
 }

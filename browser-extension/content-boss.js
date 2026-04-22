@@ -1,4 +1,41 @@
 (() => {
+  const LIST_CARD_SELECTORS = [
+    '.job-card-wrapper',
+    '.search-job-result',
+    '.job-list-box li',
+    '.job-list-box > div',
+  ];
+
+  const LIST_TITLE_SELECTORS = [
+    '.job-name',
+    '.job-card-body .job-title',
+    '.job-card-body .job-name',
+    'a[ka*="job"] .job-name',
+    '[class*="job-name"]',
+  ];
+
+  const LIST_COMPANY_SELECTORS = [
+    '.company-name',
+    '.company-text .name',
+    '.company-info .company-name',
+    '[class*="company-name"]',
+  ];
+
+  const DETAIL_TITLE_SELECTORS = [
+    '.job-banner .name h1',
+    '.job-primary .name h1',
+    '.job-name',
+    'h1',
+  ];
+
+  const DETAIL_COMPANY_SELECTORS = [
+    '.company-info .name',
+    '.company-name',
+    '.job-detail-company .company-name',
+    'a[href*="gongsi"]',
+    '[class*="company-name"]',
+  ];
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     try {
       if (message?.type === 'NBWF_EXTRACT_LIST_PAGE') {
@@ -24,19 +61,11 @@
     for (const card of cards) {
       const anchor = card.querySelector('a[href*="/job_detail/"]');
       const sourceUrl = toAbsoluteUrl(anchor?.getAttribute('href'));
-      const title = firstText(card, [
-        '.job-name',
-        '.job-card-body .job-title',
-        '.job-card-body .job-name',
-        'a[ka*="job"] .job-name',
-      ]);
-      const company = firstText(card, [
-        '.company-name',
-        '.company-text .name',
-        '.company-info .company-name',
-      ]);
+      const title = firstText(card, LIST_TITLE_SELECTORS);
+      const company = firstText(card, LIST_COMPANY_SELECTORS);
+      const externalJobId = extractExternalJobId(sourceUrl);
 
-      if (!title || !company) {
+      if (!title || !company || (!sourceUrl && !externalJobId)) {
         continue;
       }
 
@@ -60,7 +89,7 @@
       ]).filter((value) => looksLikeBenefit(value));
 
       const job = {
-        externalJobId: extractExternalJobId(sourceUrl),
+        externalJobId,
         sourceUrl,
         title,
         company,
@@ -83,6 +112,7 @@
         ]),
         rawPayload: {
           pageType: 'LIST',
+          selectorVersion: 'v2',
           capturedAt: new Date().toISOString(),
           text: limitText(card.innerText, 1200),
         },
@@ -105,18 +135,8 @@
   }
 
   function extractDetailPage() {
-    const title = firstText(document, [
-      '.job-banner .name h1',
-      '.job-primary .name h1',
-      '.job-name',
-      'h1',
-    ]);
-    const company = firstText(document, [
-      '.company-info .name',
-      '.company-name',
-      '.job-detail-company .company-name',
-      'a[href*="gongsi"]',
-    ]);
+    const title = firstText(document, DETAIL_TITLE_SELECTORS);
+    const company = firstText(document, DETAIL_COMPANY_SELECTORS);
     const salaryTextRaw = firstText(document, [
       '.job-banner .salary',
       '.job-primary .salary',
@@ -147,6 +167,11 @@
       '.job-detail-section',
       '.job-detail-box',
     ]);
+    const missingFields = [
+      !title ? 'title' : null,
+      !company ? 'company' : null,
+      !descriptionFull ? 'descriptionFull' : null,
+    ].filter(Boolean);
 
     return {
       externalJobId: extractExternalJobId(window.location.href),
@@ -169,22 +194,24 @@
       ]),
       rawPayload: {
         pageType: 'DETAIL',
+        selectorVersion: 'v2',
         capturedAt: new Date().toISOString(),
         title: document.title,
+        missingFields,
       },
     };
   }
 
   function findJobCards() {
-    const directCards = Array.from(document.querySelectorAll('.job-card-wrapper'));
+    const directCards = LIST_CARD_SELECTORS.flatMap((selector) => Array.from(document.querySelectorAll(selector)));
     if (directCards.length > 0) {
-      return directCards;
+      return Array.from(new Set(directCards));
     }
 
     const anchors = Array.from(document.querySelectorAll('a[href*="/job_detail/"]'));
-    return anchors
+    return Array.from(new Set(anchors
       .map((anchor) => anchor.closest('.search-job-result, .job-card-wrapper, li, .job-list-box > div, .job-card-left'))
-      .filter(Boolean);
+      .filter(Boolean)));
   }
 
   function collectTexts(root, selectors) {

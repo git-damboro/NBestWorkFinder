@@ -154,6 +154,10 @@ button:disabled {
   font-weight: 700;
 }
 
+.task-title + .task-title {
+  margin-top: 4px;
+}
+
 .steps {
   padding-left: 18px;
 }
