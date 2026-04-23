@@ -23,6 +23,10 @@ type TabType = 'analysis' | 'interview';
 type DetailViewType = 'list' | 'interviewDetail';
 const JOB_DRAFT_POLL_INTERVAL_MS = 3000;
 
+function isUnfinishedInterviewStatus(status?: string): boolean {
+  return status === 'CREATED' || status === 'IN_PROGRESS';
+}
+
 export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }: ResumeDetailPageProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -110,6 +114,13 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
         setLoadingInterview(true);
         try {
           const detail = await historyApi.getInterviewDetail(viewInterview);
+          if (isUnfinishedInterviewStatus(detail.status)) {
+            navigate(`/interview/${resumeId}`, {
+              state: { resumeText: resume.resumeText },
+              replace: true,
+            });
+            return;
+          }
           setSelectedInterview(detail);
           setDetailView('interviewDetail');
         } catch (err) {
@@ -120,7 +131,7 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
       };
       loadAndViewInterview();
     }
-  }, [location.state, resume]);
+  }, [location.state, navigate, resume, resumeId]);
 
   const handleExportAnalysisPdf = async () => {
     setExporting('analysis');
@@ -164,6 +175,12 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
     setLoadingInterview(true);
     try {
       const detail = await historyApi.getInterviewDetail(sessionId);
+      if (resume && isUnfinishedInterviewStatus(detail.status)) {
+        navigate(`/interview/${resumeId}`, {
+          state: { resumeText: resume.resumeText },
+        });
+        return;
+      }
       setSelectedInterview(detail);
       setDetailView('interviewDetail');
     } catch (err) {
