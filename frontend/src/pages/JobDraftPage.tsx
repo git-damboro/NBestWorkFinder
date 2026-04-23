@@ -8,6 +8,7 @@ import {
   CheckSquare,
   Copy,
   Download,
+  FilePenLine,
   ExternalLink,
   Filter,
   Loader2,
@@ -20,6 +21,7 @@ import { jobDraftApi } from '../api';
 import { getErrorMessage } from '../api/request';
 import type { JobDraftBatch, JobDraftItem } from '../types/job-draft';
 import { formatDateOnly, formatDateTime } from '../utils/date';
+import JobDraftEditDialog, { type JobDraftEditFormData } from '../components/JobDraftEditDialog';
 
 type DraftFilter = 'ALL' | 'PENDING_IMPORT' | 'IMPORTED' | 'NEEDS_DETAIL' | 'DETAIL_COMPLETED' | 'HIGH_MATCH';
 
@@ -143,6 +145,8 @@ export default function JobDraftPage() {
   const [expandedDescriptionIds, setExpandedDescriptionIds] = useState<Set<string>>(new Set());
   const [copiedOpenerDraftId, setCopiedOpenerDraftId] = useState<string | null>(null);
   const [syncingDraftItemId, setSyncingDraftItemId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<JobDraftItem | null>(null);
+  const [savingDraftEdit, setSavingDraftEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +171,8 @@ export default function JobDraftPage() {
       setLastImportedJobIds([]);
       setCopiedOpenerDraftId(null);
       setSyncingDraftItemId(null);
+      setEditingItem(null);
+      setSavingDraftEdit(false);
       return true;
     } catch (requestError) {
       setBatch(null);
@@ -176,6 +182,8 @@ export default function JobDraftPage() {
       setLastImportedJobIds([]);
       setCopiedOpenerDraftId(null);
       setSyncingDraftItemId(null);
+      setEditingItem(null);
+      setSavingDraftEdit(false);
       setError(getErrorMessage(requestError));
       return false;
     } finally {
@@ -196,6 +204,8 @@ export default function JobDraftPage() {
         setSelectedIds(new Set());
         setRecoveredBatchMessage(null);
         setLastImportedJobIds([]);
+        setEditingItem(null);
+        setSavingDraftEdit(false);
         setError(null);
         return;
       }
@@ -210,6 +220,8 @@ export default function JobDraftPage() {
       setItems([]);
       setSelectedIds(new Set());
       setRecoveredBatchMessage(null);
+      setEditingItem(null);
+      setSavingDraftEdit(false);
       setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
@@ -373,6 +385,58 @@ export default function JobDraftPage() {
       }
       return next;
     });
+  };
+
+  const openEditDialog = (item: JobDraftItem) => {
+    setError(null);
+    setSuccessMessage(null);
+    setEditingItem(item);
+  };
+
+  const closeEditDialog = () => {
+    if (savingDraftEdit) {
+      return;
+    }
+    setEditingItem(null);
+  };
+
+  const saveDraftEdit = async (form: JobDraftEditFormData) => {
+    if (!editingItem || !batch) {
+      return;
+    }
+
+    setSavingDraftEdit(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const descriptionFull = form.descriptionFull.trim();
+      const updatedItem = await jobDraftApi.syncItemDetail(editingItem.draftItemId, {
+        resumeId: batch.resumeId ?? undefined,
+        title: form.title,
+        company: form.company,
+        location: form.location || undefined,
+        salaryTextRaw: form.salaryTextRaw || undefined,
+        experienceTextRaw: form.experienceTextRaw || undefined,
+        educationTextRaw: form.educationTextRaw || undefined,
+        recruiterName: form.recruiterName || undefined,
+        techTags: form.techTags,
+        descriptionPreview: descriptionFull ? descriptionFull.slice(0, 180) : undefined,
+        descriptionFull: descriptionFull || undefined,
+      });
+
+      setItems((previous) =>
+        previous.map((current) =>
+          current.draftItemId === updatedItem.draftItemId ? updatedItem : current,
+        ),
+      );
+      setEditingItem(null);
+      setSuccessMessage(`已保存草稿修改：${updatedItem.title}`);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setSavingDraftEdit(false);
+    }
   };
 
   const copyOpenerText = async (item: JobDraftItem) => {
@@ -753,6 +817,16 @@ export default function JobDraftPage() {
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
+                          {!item.imported && (
+                            <button
+                              type="button"
+                              onClick={() => openEditDialog(item)}
+                              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                            >
+                              <FilePenLine className="h-3.5 w-3.5" />
+                              编辑草稿
+                            </button>
+                          )}
                           {item.sourceUrl && (
                             <a
                               href={item.sourceUrl}
@@ -793,6 +867,14 @@ export default function JobDraftPage() {
           </section>
         </>
       )}
+
+      <JobDraftEditDialog
+        open={editingItem !== null}
+        item={editingItem}
+        loading={savingDraftEdit}
+        onCancel={closeEditDialog}
+        onSubmit={(form) => void saveDraftEdit(form)}
+      />
     </div>
   );
 }
