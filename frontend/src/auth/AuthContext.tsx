@@ -1,7 +1,13 @@
-import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authApi } from '../api/auth';
 import type { AuthSession, AuthUser, LoginRequest, RegisterRequest } from '../types/auth';
-import { clearAuthSession, loadAuthSession, saveAuthSession, toAuthSession } from './auth-storage';
+import {
+  clearAuthSession,
+  loadAuthSession,
+  saveAuthSession,
+  subscribeAuthSessionChange,
+  toAuthSession,
+} from './auth-storage';
 
 interface AuthContextValue {
   session: AuthSession | null;
@@ -21,6 +27,10 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<AuthSession | null>(() => loadAuthSession());
+
+  useEffect(() => subscribeAuthSessionChange(() => {
+    setSession(loadAuthSession());
+  }), []);
 
   const applySession = useCallback((nextSession: AuthSession) => {
     saveAuthSession(nextSession);

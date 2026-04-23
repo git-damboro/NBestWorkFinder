@@ -1,6 +1,14 @@
 import type { AuthResponse, AuthSession } from '../types/auth';
 
 const AUTH_STORAGE_KEY = 'nbwf_auth_session';
+const AUTH_SESSION_CHANGED_EVENT = 'nbwf:auth-session-changed';
+
+function emitAuthSessionChanged(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.dispatchEvent(new Event(AUTH_SESSION_CHANGED_EVENT));
+}
 
 export function toAuthSession(response: AuthResponse): AuthSession {
   return {
@@ -47,14 +55,36 @@ export function saveAuthSession(session: AuthSession): void {
   try {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
   } catch {}
+  emitAuthSessionChanged();
 }
 
 export function clearAuthSession(): void {
   try {
     localStorage.removeItem(AUTH_STORAGE_KEY);
   } catch {}
+  emitAuthSessionChanged();
 }
 
 export function getAccessToken(): string | null {
   return loadAuthSession()?.accessToken ?? null;
+}
+
+export function subscribeAuthSessionChange(listener: () => void): () => void {
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === AUTH_STORAGE_KEY) {
+      listener();
+    }
+  };
+
+  window.addEventListener(AUTH_SESSION_CHANGED_EVENT, listener);
+  window.addEventListener('storage', handleStorage);
+
+  return () => {
+    window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, listener);
+    window.removeEventListener('storage', handleStorage);
+  };
 }
