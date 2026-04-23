@@ -4,11 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {Virtuoso, type VirtuosoHandle} from 'react-virtuoso';
 import {knowledgeBaseApi, type KnowledgeBaseItem, type SortOption} from '../api/knowledgebase';
+import { getErrorMessage } from '../api/request';
 import {ragChatApi, type RagChatSessionListItem} from '../api/ragChat';
 import {formatDateOnly} from '../utils/date';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 import CodeBlock from '../components/CodeBlock';
-import {ChevronLeft, ChevronRight, Edit, MessageSquare, Pin, Plus, Trash2,} from 'lucide-react';
+import {AlertCircle, ChevronLeft, ChevronRight, Edit, MessageSquare, Pin, Plus, Trash2, X,} from 'lucide-react';
 
 interface KnowledgeBaseQueryPageProps {
   onBack: () => void;
@@ -50,6 +51,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
   const [sessionDeleteConfirm, setSessionDeleteConfirm] = useState<{ id: number; title: string } | null>(null);
   const [editingSessionTitle, setEditingSessionTitle] = useState<{ id: number; title: string } | null>(null);
   const [newSessionTitle, setNewSessionTitle] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 消息状态
   const [question, setQuestion] = useState('');
@@ -81,6 +83,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
       setKnowledgeBases(list);
     } catch (err) {
       console.error('加载知识库列表失败', err);
+      setErrorMessage(getErrorMessage(err));
     } finally {
       setLoadingList(false);
     }
@@ -92,11 +95,13 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
       return;
     }
     setLoadingList(true);
+    setErrorMessage(null);
     try {
       const list = await knowledgeBaseApi.search(searchKeyword.trim());
       setKnowledgeBases(list);
     } catch (err) {
       console.error('搜索知识库失败', err);
+      setErrorMessage(getErrorMessage(err));
     } finally {
       setLoadingList(false);
     }
@@ -150,12 +155,14 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
       setSessions(list);
     } catch (err) {
       console.error('加载会话列表失败', err);
+      setErrorMessage(getErrorMessage(err));
     } finally {
       setLoadingSessions(false);
     }
   };
 
   const handleToggleKb = (kbId: number) => {
+    setErrorMessage(null);
     setSelectedKbIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(kbId)) {
@@ -173,12 +180,14 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
   };
 
   const handleNewSession = () => {
+    setErrorMessage(null);
     setCurrentSessionId(null);
     setCurrentSessionTitle('');
     setMessages([]);
   };
 
   const handleLoadSession = async (sessionId: number) => {
+    setErrorMessage(null);
     try {
       const detail = await ragChatApi.getSessionDetail(sessionId);
       setCurrentSessionId(detail.id);
@@ -192,11 +201,13 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
       })));
     } catch (err) {
       console.error('加载会话失败', err);
+      setErrorMessage(getErrorMessage(err));
     }
   };
 
   const handleDeleteSession = async () => {
     if (!sessionDeleteConfirm) return;
+    setErrorMessage(null);
     try {
       await ragChatApi.deleteSession(sessionDeleteConfirm.id);
       await loadSessions();
@@ -206,6 +217,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
       setSessionDeleteConfirm(null);
     } catch (err) {
       console.error('删除会话失败', err);
+      setErrorMessage(getErrorMessage(err));
     }
   };
 
@@ -216,6 +228,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
 
   const handleSaveSessionTitle = async () => {
     if (!editingSessionTitle || !newSessionTitle.trim()) return;
+    setErrorMessage(null);
     try {
       await ragChatApi.updateSessionTitle(editingSessionTitle.id, newSessionTitle.trim());
       await loadSessions();
@@ -226,16 +239,19 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
       setNewSessionTitle('');
     } catch (err) {
       console.error('更新会话标题失败', err);
+      setErrorMessage(getErrorMessage(err));
     }
   };
 
   const handleTogglePin = async (sessionId: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    setErrorMessage(null);
     try {
       await ragChatApi.togglePin(sessionId);
       await loadSessions();
     } catch (err) {
       console.error('切换置顶状态失败', err);
+      setErrorMessage(getErrorMessage(err));
     }
   };
 
@@ -260,6 +276,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
     const userQuestion = question.trim();
     setQuestion('');
     setLoading(true);
+    setErrorMessage(null);
 
     let sessionId = currentSessionId;
     if (!sessionId) {
@@ -270,6 +287,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
         setCurrentSessionTitle(session.title);
       } catch (err) {
         console.error('创建会话失败', err);
+        setErrorMessage(getErrorMessage(err));
         setLoading(false);
         return;
       }
@@ -326,12 +344,14 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
         (error: Error) => {
           console.error('流式查询失败:', error);
           updateAssistantMessage(fullContent || error.message || '回答失败，请重试');
+          setErrorMessage(error.message || '回答失败，请重试');
           setLoading(false);
         }
       );
     } catch (err) {
       console.error('发起流式查询失败:', err);
       updateAssistantMessage(err instanceof Error ? err.message : '回答失败，请重试');
+      setErrorMessage(getErrorMessage(err));
       setLoading(false);
     }
   };
@@ -359,6 +379,23 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
 
   return (
     <div className="max-w-7xl mx-auto pt-8 pb-10 px-4">
+      {errorMessage && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-200">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="rounded p-1 text-red-500 transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-200"
+            title="关闭提示"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* 头部 */}
       <div className="flex items-center justify-between mb-6">
         <div>
