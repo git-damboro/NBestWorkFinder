@@ -82,6 +82,24 @@ java {
     }
 }
 
+def bootRunMinHeap = providers.gradleProperty('bootRunMinHeap')
+    .orElse(providers.environmentVariable('NBWF_BOOTRUN_MIN_HEAP'))
+    .orElse('256m')
+def bootRunMaxHeap = providers.gradleProperty('bootRunMaxHeap')
+    .orElse(providers.environmentVariable('NBWF_BOOTRUN_MAX_HEAP'))
+    .orElse('1024m')
+def bootRunMaxMetaspace = providers.gradleProperty('bootRunMaxMetaspace')
+    .orElse(providers.environmentVariable('NBWF_BOOTRUN_MAX_METASPACE'))
+    .orElse('384m')
+
+tasks.named('bootRun') {
+    jvmArgs(
+        "-Xms${bootRunMinHeap.get()}",
+        "-Xmx${bootRunMaxHeap.get()}",
+        "-XX:MaxMetaspaceSize=${bootRunMaxMetaspace.get()}"
+    )
+}
+
 tasks.named('test') {
     useJUnitPlatform()
 }

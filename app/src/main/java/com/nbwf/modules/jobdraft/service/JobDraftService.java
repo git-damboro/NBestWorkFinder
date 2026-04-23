@@ -199,6 +199,13 @@ public class JobDraftService {
     public ImportJobDraftItemsResultDTO importItems(String batchId, ImportJobDraftItemsRequest req, Long userId) {
         JobDraftBatchEntity batch = findBatchOrThrow(batchId, userId);
         List<JobDraftItemEntity> items = itemRepository.findByBatchIdAndUserIdAndDraftItemIdIn(batchId, userId, req.draftItemIds());
+        log.info(
+            "开始导入职位草稿: batchId={}, userId={}, requestedCount={}, resolvedCount={}",
+            batchId,
+            userId,
+            req.draftItemIds().size(),
+            items.size()
+        );
 
         List<Long> importedJobIds = new ArrayList<>();
         List<String> failedDraftItemIds = new ArrayList<>();
@@ -235,6 +242,16 @@ public class JobDraftService {
         }
 
         batchRepository.save(batch);
+
+        log.info(
+            "职位草稿导入完成: batchId={}, userId={}, importedCount={}, skippedCount={}, failedCount={}, batchStatus={}",
+            batchId,
+            userId,
+            importedJobIds.size(),
+            skippedCount,
+            failedDraftItemIds.size(),
+            batch.getStatus()
+        );
 
         return new ImportJobDraftItemsResultDTO(
             batchId,
