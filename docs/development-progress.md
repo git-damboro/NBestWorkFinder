@@ -8,10 +8,10 @@
 | 项目 | 内容 |
 |---|---|
 | 项目名称 | `NBestWorkFinder` |
-| 当前日期 | `2026-04-19` |
-| 当前阶段 | 用户认证闭环已完成，核心业务进入“简历 → 职位 → 面试 → 记录/报告”的链路完善阶段 |
-| 本轮重点 | 将 AI 长耗时能力改造成后台任务，解决“切页后任务中断、回到页面后找不到结果”的体验问题 |
-| 当前主线 | 已完成“职位草稿后台生成 + 面试题后台生成 + 页面自动恢复最近任务 + 面试目标职位快照持久化” |
+| 当前日期 | `2026-04-23` |
+| 当前阶段 | 手测反馈收敛阶段，核心链路进入“修复完成 → 手测回归 → 简历包装”的准备阶段 |
+| 本轮重点 | 收敛 `BUG-001` ~ `BUG-007`，优先保证面试、职位草稿、认证、知识库下载/对话链路可用 |
+| 当前主线 | 已完成手测反馈的主要代码修复；`BUG-004` 已加开发稳定性护栏，暂按要求不做本地复现验证 |
 
 ## 2. 模块进度总览
 
@@ -22,7 +22,7 @@
 | `job` | 已完成主链路 | 已支持职位工作台、职位详情、职位编辑、简历匹配、根据简历生成职位草稿并保存到工作台 |
 | `interview` | 已完成主链路 / 已隔离 / 已支持职位定向 | 已支持会话创建、恢复、答题、报告、详情、导出、删除，并支持携带 `jobId` 生成定向面试题 |
 | `knowledgebase` | 已完成 / 已隔离 | 知识库上传、列表、查询、下载、删除、分类、RAG 会话已接入 `userId` |
-| `frontend` | 持续完善中 | 简历详情页职位草稿自动恢复完成；面试页后台任务恢复完成 |
+| `frontend` | 持续完善中 | 已补齐未完成面试续答、草稿导入前编辑、知识库下载/对话失败提示等手测反馈 |
 | `ai-generation` | 本轮核心已完成 | 通用任务基础设施、职位草稿后台任务、面试题后台任务、查询与恢复接口均已完成 |
 | `security` | 持续完善中 | 核心资源需登录访问，主要用户数据隔离已完成，后续继续补跨用户拒绝场景测试 |
 
@@ -57,14 +57,17 @@
 | `2026-04-19` | `:app:test --tests "com.nbwf.modules.interview.service.InterviewSessionServiceTest" --tests "com.nbwf.modules.aigeneration.listener.AiGenerationStreamConsumerTest"` 红灯验证 | 通过，确认缺少面试异步任务接口、目标职位快照字段、消费者接入 |
 | `2026-04-19` | `:app:test --tests "com.nbwf.modules.interview.service.InterviewSessionServiceTest" --tests "com.nbwf.modules.aigeneration.listener.AiGenerationStreamConsumerTest" --tests "com.nbwf.modules.interview.service.InterviewPersistenceServiceTest"` | 通过 |
 | `2026-04-19` | `frontend -> npm.cmd run build`（面试页后台任务改造后） | 通过，仍存在既有 CSS minify warning 与大 chunk warning，不影响本次交付 |
+| `2026-04-23` | `$env:JAVA_HOME='G:\\jdk'; .\\gradlew.bat :app:test --tests "com.nbwf.modules.interview.service.InterviewQuestionServiceTest" --tests "com.nbwf.modules.interview.service.InterviewSessionServiceTest"` | 通过，验证面试题数量与会话链路修复 |
+| `2026-04-23` | `frontend -> npm.cmd run build`（草稿编辑、知识库下载/对话提示修复后） | 通过，仍存在既有 CSS minify warning 与大 chunk warning |
+| `2026-04-23` | `$env:JAVA_HOME='G:\\jdk'; .\\gradlew.bat :app:compileJava` | 通过，验证 `bootRun` JVM 护栏与职位草稿导入日志改动可编译 |
 
 ## 6. 当前优先级
 
 | 优先级 | 模块 | 任务 | 说明 |
 |---:|---|---|---|
-| P0 | `history / report` | 前端展示目标职位快照 | 让“职位 → 面试 → 历史/报告”链路在 UI 上完整可见 |
-| P0 | `interview` | 完善任务恢复边界处理 | 补充更多失败提示、重复恢复、异常结果解析场景 |
-| P1 | `job + interview` | 继续打磨职位工作台到面试链路 | 例如从职位卡片直接跳转历史、回看对应面试记录 |
+| P0 | `manual regression` | 回归 `BUG-001` ~ `BUG-007` | 当前主要代码修复已完成，下一步需要按手测清单确认真实表现 |
+| P0 | `jobdraft / dev stability` | 复现验证草稿导入后端稳定性 | 已限制本地 `bootRun` 堆并补日志；本轮按要求暂不做本地复现 |
+| P1 | `UX` | 选择一个高求职展示价值优化继续实现 | 优先考虑职位工作台详情弹窗或岗位大输入框识别 |
 | P1 | `tests` | 补更多跨用户隔离与恢复回归测试 | 强化权限与链路稳定性 |
 | P2 | `frontend` | 分析大包与 chunk warning | 当前不阻塞交付，后续单独做性能优化 |
 
@@ -72,9 +75,9 @@
 
 | 项目 | 内容 |
 |---|---|
-| 目标 | 完成历史页 / 详情页 / 报告页的目标职位信息展示 |
-| 具体任务 | 补充前端 `InterviewHistoryPage`、`InterviewDetailPanel` 等页面的目标职位卡片与跳转入口 |
-| 完成标准 | 用户能在面试历史、详情、报告中明确看到该次面试对应的目标职位 |
+| 目标 | 完成手测反馈回归或继续做一个求职展示型 UX 优化 |
+| 具体任务 | 若继续修复：按 `BUG-001` ~ `BUG-007` 手测；若继续开发：优先做职位详情弹窗或岗位 JD 大输入框 |
+| 完成标准 | 已修问题在页面可复现验证通过，或新增 UX 能明显提升演示价值 |
 
 ## 8. 已识别风险与注意点
 
@@ -85,17 +88,17 @@
 | 历史数据兼容 | 旧面试会话没有目标职位快照字段 | 新字段统一按可空处理，兼容旧数据 |
 | 轮询清理 | 页面切换或状态切换时若不清理轮询，容易污染状态 | 职位草稿页与面试页都已统一清理定时器 |
 | 构建告警 | 仍存在 Gradle deprecated 提示、前端 CSS/chunk warning | 当前不影响功能交付，后续专项处理 |
-| GitHub 推送 | 远端网络连接此前多次失败 | 本地提交正常，推送时需重试 `git push origin master` |
+| GitHub 推送 | 远端网络连接此前多次失败 | 最近一次重试显示 `Everything up-to-date`，后续仍可能因网络波动需要重试 |
 
 ## 9. 最近提交记录
 
 | Commit | 类型 | 说明 |
 |---|---|---|
-| `d58a425` | docs | 新增 AI 生成任务后台化设计文档 |
-| `d5d40d2` | docs | 新增 AI 生成任务实施计划文档 |
-| `e39ab94` | feat | 通用 AI 生成任务基础设施（Task1） |
-| `198b7a9` | feat | 职位草稿后台任务与简历详情页自动恢复（Task2） |
-| `当前提交` | feat | 面试题后台任务、目标职位快照、面试页自动恢复（Task3 / Task4） |
+| `031d5e3` | fix | 支持职位草稿导入前编辑 |
+| `20f474e` | fix | 知识库下载增加反馈和下载中状态 |
+| `577b9cc` | fix | 限制本地 `bootRun` 堆并补充草稿导入日志 |
+| `9fabcb7` | fix | 知识库对话页显示请求失败提示 |
+| `当前提交` | docs | 同步手测反馈收敛进度 |
 
 ## 10. 文档维护规则
 
