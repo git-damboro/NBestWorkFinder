@@ -345,7 +345,9 @@ export default function JobDraftPage() {
       const result = await jobDraftApi.importItems(batch.batchId, importableIds);
       await loadBatch(batch.batchId);
       setLastImportedJobIds(result.importedJobIds);
-      setSuccessMessage(`导入完成：成功 ${result.importedCount} 条，跳过 ${result.skippedCount} 条。`);
+      setSuccessMessage(
+        `导入完成：成功 ${result.importedCount} 条，跳过 ${result.skippedCount} 条，失败 ${result.failedCount} 条。`
+      );
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {

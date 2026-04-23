@@ -99,6 +99,8 @@ export interface ImportJobDraftItemsResult {
   batchId: string;
   importedCount: number;
   skippedCount: number;
+  failedCount: number;
+  failedDraftItemIds: string[];
   importedJobIds: number[];
 }
 

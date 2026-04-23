@@ -17,6 +17,7 @@ import com.nbwf.modules.jobdraft.repository.JobDraftItemRepository;
 import com.nbwf.modules.resume.model.ResumeEntity;
 import com.nbwf.modules.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class JobDraftService {
 
     private static final List<JobDraftBatchStatus> RECOVERABLE_BATCH_STATUSES = List.of(
@@ -194,31 +196,36 @@ public class JobDraftService {
         return toBatchDTO(batch);
     }
 
-    @Transactional
     public ImportJobDraftItemsResultDTO importItems(String batchId, ImportJobDraftItemsRequest req, Long userId) {
         JobDraftBatchEntity batch = findBatchOrThrow(batchId, userId);
         List<JobDraftItemEntity> items = itemRepository.findByBatchIdAndUserIdAndDraftItemIdIn(batchId, userId, req.draftItemIds());
 
         List<Long> importedJobIds = new ArrayList<>();
+        List<String> failedDraftItemIds = new ArrayList<>();
         int skippedCount = 0;
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+
         for (JobDraftItemEntity item : items) {
-            if (item.isImported() || jobRepository.existsByUserIdAndSourceFingerprint(userId, item.getSourceFingerprint())) {
-                skippedCount++;
+            try {
+                DraftImportOutcome outcome = Objects.requireNonNull(transactionTemplate.execute(status -> importSingleItem(item, userId)));
+                if (outcome.skipped()) {
+                    skippedCount++;
+                }
+                if (outcome.importedJobId() != null) {
+                    importedJobIds.add(outcome.importedJobId());
+                }
+            } catch (RuntimeException e) {
+                log.warn("职位草稿导入失败: batchId={}, draftItemId={}, error={}", batchId, item.getDraftItemId(), e.getMessage(), e);
                 item.setSelected(false);
                 item.setSelectedAt(null);
-                continue;
+                failedDraftItemIds.add(item.getDraftItemId());
             }
-
-            JobEntity savedJob = jobRepository.save(buildJobFromDraft(item, userId));
-            item.setImported(true);
-            item.setImportedJobId(savedJob.getId());
-            item.setSelected(false);
-            item.setSelectedAt(null);
-            importedJobIds.add(savedJob.getId());
         }
 
-        batch.setImportedCount(batch.getImportedCount() + importedJobIds.size());
-        batch.setSelectedCount(0);
+        transactionTemplate.executeWithoutResult(status -> itemRepository.saveAll(items));
+
+        batch.setImportedCount((int) items.stream().filter(JobDraftItemEntity::isImported).count());
+        batch.setSelectedCount((int) items.stream().filter(JobDraftItemEntity::isSelected).count());
         if (batch.getImportedCount() >= batch.getTotalCount() && batch.getTotalCount() > 0) {
             batch.setStatus(JobDraftBatchStatus.COMPLETED);
         } else if (batch.getImportedCount() > 0) {
@@ -227,10 +234,40 @@ public class JobDraftService {
             batch.setStatus(JobDraftBatchStatus.READY);
         }
 
-        itemRepository.saveAll(items);
         batchRepository.save(batch);
 
-        return new ImportJobDraftItemsResultDTO(batchId, importedJobIds.size(), skippedCount, importedJobIds);
+        return new ImportJobDraftItemsResultDTO(
+            batchId,
+            importedJobIds.size(),
+            skippedCount,
+            failedDraftItemIds.size(),
+            List.copyOf(failedDraftItemIds),
+            List.copyOf(importedJobIds)
+        );
+    }
+
+    private DraftImportOutcome importSingleItem(JobDraftItemEntity item, Long userId) {
+        item.setSelected(false);
+        item.setSelectedAt(null);
+
+        if (item.isImported()) {
+            itemRepository.save(item);
+            return DraftImportOutcome.skipped(item.getImportedJobId());
+        }
+
+        Optional<JobEntity> existingJob = jobRepository.findFirstByUserIdAndSourceFingerprint(userId, item.getSourceFingerprint());
+        if (existingJob.isPresent()) {
+            item.setImported(true);
+            item.setImportedJobId(existingJob.get().getId());
+            itemRepository.save(item);
+            return DraftImportOutcome.skipped(existingJob.get().getId());
+        }
+
+        JobEntity savedJob = jobRepository.save(buildJobFromDraft(item, userId));
+        item.setImported(true);
+        item.setImportedJobId(savedJob.getId());
+        itemRepository.save(item);
+        return DraftImportOutcome.imported(savedJob.getId());
     }
 
     public JobDraftItemDTO syncItemDetail(String draftItemId, JobDraftDetailSyncRequest req, Long userId) {
@@ -618,5 +655,16 @@ public class JobDraftService {
 
     private String generateId(String prefix) {
         return prefix + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    }
+
+    private record DraftImportOutcome(Long importedJobId, boolean skipped) {
+
+        private static DraftImportOutcome imported(Long importedJobId) {
+            return new DraftImportOutcome(importedJobId, false);
+        }
+
+        private static DraftImportOutcome skipped(Long importedJobId) {
+            return new DraftImportOutcome(importedJobId, true);
+        }
     }
 }

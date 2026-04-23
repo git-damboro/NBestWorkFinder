@@ -6,6 +6,8 @@ public record ImportJobDraftItemsResultDTO(
     String batchId,
     int importedCount,
     int skippedCount,
+    int failedCount,
+    List<String> failedDraftItemIds,
     List<Long> importedJobIds
 ) {
 }
