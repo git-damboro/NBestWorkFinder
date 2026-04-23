@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import {knowledgeBaseApi, KnowledgeBaseItem, KnowledgeBaseStats, SortOption, VectorStatus,} from '../api/knowledgebase';
+import { getErrorMessage } from '../api/request';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 
 interface KnowledgeBaseManagePageProps {
@@ -116,6 +117,11 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
   const [stats, setStats] = useState<KnowledgeBaseStats | null>(null);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadFeedback, setDownloadFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('time');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -223,20 +229,33 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
   };
 
   // 下载知识库
-    const handleDownload = async (kb: KnowledgeBaseItem) => {
-        try {
-            const blob = await knowledgeBaseApi.downloadKnowledgeBase(kb.id);
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = kb.originalFilename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('下载失败:', error);
-        }
+  const handleDownload = async (kb: KnowledgeBaseItem) => {
+    try {
+      setDownloadingId(kb.id);
+      setDownloadFeedback(null);
+
+      const blob = await knowledgeBaseApi.downloadKnowledgeBase(kb.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = kb.originalFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      setDownloadFeedback({
+        type: 'success',
+        message: `已开始下载：${kb.originalFilename}`,
+      });
+    } catch (error) {
+      console.error('下载失败:', error);
+      setDownloadFeedback({
+        type: 'error',
+        message: getErrorMessage(error),
+      });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   // 开始编辑分类
@@ -314,6 +333,23 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
           </button>
         </div>
       </div>
+
+      {downloadFeedback && (
+        <div
+          className={`mb-6 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${
+            downloadFeedback.type === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/20 dark:text-emerald-200'
+              : 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-200'
+          }`}
+        >
+          {downloadFeedback.type === 'success' ? (
+            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          ) : (
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          )}
+          <span>{downloadFeedback.message}</span>
+        </div>
+      )}
       {/* 统计卡片 */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -556,10 +592,15 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
                       {/* 下载按钮 */}
                       <button
                         onClick={() => handleDownload(kb)}
-                        className="p-2 text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors"
-                        title="下载"
+                        disabled={downloadingId === kb.id}
+                        className="p-2 text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        title={downloadingId === kb.id ? '下载中' : '下载'}
                       >
-                        <Download className="w-4 h-4" />
+                        {downloadingId === kb.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
                       </button>
                       {/* 重新向量化按钮（仅 FAILED 状态显示） */}
                       {kb.vectorStatus === 'FAILED' && (
