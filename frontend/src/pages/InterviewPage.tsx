@@ -383,7 +383,23 @@ export default function Interview({
 
   const renderInterview = () => {
     if (!session || !currentQuestion) {
-      return null;
+      return (
+        <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center dark:border-amber-800 dark:bg-amber-900/20">
+          <h2 className="mb-3 text-xl font-semibold text-amber-900 dark:text-amber-200">
+            面试内容正在准备中
+          </h2>
+          <p className="mb-6 text-sm leading-6 text-amber-700 dark:text-amber-300">
+            当前会话还没有拿到可展示的题目。请返回配置页重新恢复或重新生成。
+          </p>
+          <button
+            type="button"
+            onClick={() => setStage('config')}
+            className="rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-amber-600"
+          >
+            返回面试配置
+          </button>
+        </div>
+      );
     }
 
     return (

@@ -89,8 +89,8 @@ function InterviewWrapper() {
   const jobTarget = routeState?.jobTarget ?? null;
 
   useEffect(() => {
-    // 优先从location state获取resumeText
-    const stateText = routeState?.resumeText;
+    // 优先使用有效的 location state；无效时按 resumeId 兜底拉详情，避免刚分析完跳转后空页。
+    const stateText = routeState?.resumeText?.trim();
     if (stateText) {
       setResumeText(stateText);
       setLoading(false);
@@ -108,7 +108,7 @@ function InterviewWrapper() {
     } else {
       setLoading(false);
     }
-  }, [resumeId, location.state]);
+  }, [resumeId, routeState?.resumeText]);
 
   if (!resumeId) {
     return <Navigate to="/history" replace />;

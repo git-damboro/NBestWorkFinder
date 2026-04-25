@@ -216,21 +216,35 @@ export default function AnalysisPanel({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
               <TrendingUp className="w-5 h-5" />
               <span className="font-semibold">核心评价</span>
             </div>
-            <motion.button
-              onClick={onExport}
-              disabled={exporting}
-              className="px-4 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center gap-2"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Download className="w-4 h-4" />
-              {exporting ? '导出中...' : '导出分析报告'}
-            </motion.button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {onReanalyze && (
+                <motion.button
+                  onClick={onReanalyze}
+                  disabled={reanalyzing}
+                  className="px-4 py-2 border border-primary-200 bg-primary-50 rounded-lg text-primary-600 text-sm font-medium hover:bg-primary-100 transition-all disabled:opacity-50 flex items-center gap-2 dark:border-primary-800 dark:bg-primary-900/30 dark:text-primary-300 dark:hover:bg-primary-900/50"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <RefreshCw className={`w-4 h-4 ${reanalyzing ? 'animate-spin' : ''}`} />
+                  {reanalyzing ? '重新分析中...' : '重新分析'}
+                </motion.button>
+              )}
+              <motion.button
+                onClick={onExport}
+                disabled={exporting}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center gap-2"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Download className="w-4 h-4" />
+                {exporting ? '导出中...' : '导出分析报告'}
+              </motion.button>
+            </div>
           </div>
 
           <div
