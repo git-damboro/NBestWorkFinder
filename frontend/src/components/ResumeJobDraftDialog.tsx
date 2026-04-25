@@ -9,9 +9,11 @@ interface ResumeJobDraftDialogProps {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  taskId?: string | null;
   onClose: () => void;
   onRetry: () => void;
   onSelect: (draft: ResumeJobDraft) => void;
+  onOpenTaskCenter?: () => void;
 }
 
 export default function ResumeJobDraftDialog({
@@ -20,9 +22,11 @@ export default function ResumeJobDraftDialog({
   loading,
   saving,
   error,
+  taskId,
   onClose,
   onRetry,
   onSelect,
+  onOpenTaskCenter,
 }: ResumeJobDraftDialogProps) {
   const showEmptyState = !loading && !error && drafts.length === 0;
 
@@ -39,9 +43,25 @@ export default function ResumeJobDraftDialog({
       customContent={
         <div className="space-y-4">
           {loading && (
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-700/40 dark:text-slate-300">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              正在生成职位草稿，请稍候...
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                正在后台生成职位草稿，请稍候...
+              </div>
+              {taskId && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span>任务已进入任务中心：{taskId}</span>
+                  {onOpenTaskCenter && (
+                    <button
+                      type="button"
+                      onClick={onOpenTaskCenter}
+                      className="rounded-lg bg-white px-2.5 py-1 font-medium text-blue-600 hover:bg-blue-100 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700"
+                    >
+                      查看任务中心
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

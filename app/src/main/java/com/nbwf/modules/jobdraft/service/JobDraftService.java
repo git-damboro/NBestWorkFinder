@@ -18,6 +18,7 @@ import com.nbwf.modules.resume.model.ResumeEntity;
 import com.nbwf.modules.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -164,11 +165,14 @@ public class JobDraftService {
 
     @Transactional(readOnly = true)
     public JobDraftBatchDTO getLatestBatch(Long userId) {
-        return batchRepository.findLatestRecoverableBatch(
+        return batchRepository.findLatestRecoverableBatches(
                 userId,
                 RECOVERABLE_BATCH_STATUSES,
-                LocalDateTime.now()
+                LocalDateTime.now(),
+                PageRequest.of(0, 1)
             )
+            .stream()
+            .findFirst()
             .map(this::toBatchDTO)
             .orElse(null);
     }

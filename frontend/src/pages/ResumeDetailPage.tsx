@@ -312,15 +312,15 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
     setGeneratingJobDrafts(true);
     setJobDraftError(null);
     setJobDrafts([]);
+    setJobDraftDialogOpen(true);
 
     try {
-      const batch = await jobApi.createDraftBatchFromResume(resumeId);
-      navigate(`/jobs/drafts?batchId=${encodeURIComponent(batch.batchId)}`);
+      const task = await jobApi.createDraftTaskFromResume(resumeId);
+      await applyJobDraftTask(task);
     } catch (error) {
       setJobDrafts([]);
       setJobDraftError(getErrorMessage(error));
       setJobDraftTaskId(null);
-    } finally {
       setGeneratingJobDrafts(false);
     }
   };
@@ -576,9 +576,11 @@ export default function ResumeDetailPage({ resumeId, onBack, onStartInterview }:
         loading={generatingJobDrafts}
         saving={savingJobDraft}
         error={jobDraftError}
+        taskId={jobDraftTaskId}
         onClose={handleCloseJobDraftDialog}
         onRetry={() => void handleGenerateJobDrafts()}
         onSelect={(draft) => void handleSaveJobDraft(draft)}
+        onOpenTaskCenter={() => navigate('/tasks')}
       />
     </motion.div>
   );

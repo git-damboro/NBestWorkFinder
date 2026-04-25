@@ -124,7 +124,13 @@ function extractBatchId(task: AiGenerationTask): string | null {
 
 function resolveResultPath(task: AiGenerationTask): string | null {
   switch (task.type) {
-    case 'RESUME_JOB_DRAFT':
+    case 'RESUME_JOB_DRAFT': {
+      const batchId = extractBatchId(task);
+      if (batchId) {
+        return `/jobs/drafts?batchId=${encodeURIComponent(batchId)}`;
+      }
+      return `/history/${task.sourceId}`;
+    }
     case 'JOB_DRAFT_PAGE_SYNC': {
       const batchId = extractBatchId(task);
       if (!batchId) {
@@ -165,8 +171,10 @@ export default function TaskCenterPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
 
-  const loadTasks = useCallback(async () => {
-    setLoading(true);
+  const loadTasks = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -176,13 +184,28 @@ export default function TaskCenterPage() {
       setTasks([]);
       setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     void loadTasks();
   }, [loadTasks]);
+
+  useEffect(() => {
+    const hasRunningTask = tasks.some((task) => task.status === 'PENDING' || task.status === 'PROCESSING');
+    if (!hasRunningTask) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void loadTasks(false);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [tasks, loadTasks]);
 
   const filteredTasks = useMemo(() => {
     return tasks
@@ -221,7 +244,7 @@ export default function TaskCenterPage() {
   const handleViewResult = (task: AiGenerationTask) => {
     const path = resolveResultPath(task);
     if (!path) {
-      setActionError('当前任务结果缺少 batchId，暂时无法跳转结果页。');
+      setActionError('当前任务结果缺少结果定位信息，暂时无法跳转结果页。');
       return;
     }
     navigate(path);

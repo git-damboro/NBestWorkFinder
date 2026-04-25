@@ -51,6 +51,10 @@ function formatSource(batch: JobDraftBatch) {
   return batch.sourcePlatform || '页面同步';
 }
 
+function formatRecoverableBatchPurpose() {
+  return '用于找回上次由浏览器扩展同步或草稿池生成、但还没导入完的职位草稿批次。不会重新生成草稿，只会打开最近一个仍可继续处理的批次。';
+}
+
 function getDetailStatusLabel(item: JobDraftItem) {
   switch (item.detailSyncStatus) {
     case 'COMPLETED':
@@ -202,7 +206,7 @@ export default function JobDraftPage() {
         setBatch(null);
         setItems([]);
         setSelectedIds(new Set());
-        setRecoveredBatchMessage(null);
+        setRecoveredBatchMessage('没有可恢复的职位草稿批次。请先从简历详情生成草稿，或通过浏览器扩展同步职位。');
         setLastImportedJobIds([]);
         setEditingItem(null);
         setSavingDraftEdit(false);
@@ -507,6 +511,9 @@ export default function JobDraftPage() {
           <p className="mt-1 text-slate-500 dark:text-slate-400">
             支持恢复最近批次、多选确认并批量导入到职位工作台。
           </p>
+          <p className="mt-1 max-w-2xl text-xs text-slate-400 dark:text-slate-500">
+            {formatRecoverableBatchPurpose()}
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -582,6 +589,9 @@ export default function JobDraftPage() {
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">暂无职位草稿批次</h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             可先在简历详情页生成职位草稿，或之后通过扩展同步职位。
+          </p>
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+            {formatRecoverableBatchPurpose()}
           </p>
           <div className="mt-5 flex justify-center gap-3">
             <button

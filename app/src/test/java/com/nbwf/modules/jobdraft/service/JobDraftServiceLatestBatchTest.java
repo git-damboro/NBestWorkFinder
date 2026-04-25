@@ -15,12 +15,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -81,31 +81,34 @@ class JobDraftServiceLatestBatchTest {
         batch.setUpdatedAt(LocalDateTime.of(2026, 4, 21, 10, 5));
         batch.setExpiresAt(LocalDateTime.of(2026, 5, 21, 10, 0));
 
-        when(batchRepository.findLatestRecoverableBatch(
+        when(batchRepository.findLatestRecoverableBatches(
             eq(7L),
             eq(recoverableStatuses()),
-            any(LocalDateTime.class)
-        )).thenReturn(Optional.of(batch));
+            any(LocalDateTime.class),
+            any(Pageable.class)
+        )).thenReturn(List.of(batch));
 
         var actual = jobDraftService.getLatestBatch(7L);
 
         assertEquals("jdb_latest", actual.batchId());
         assertEquals(JobDraftBatchStatus.PARTIAL_IMPORTED, actual.status());
         assertEquals(21L, actual.resumeId());
-        verify(batchRepository).findLatestRecoverableBatch(
+        verify(batchRepository).findLatestRecoverableBatches(
             eq(7L),
             eq(recoverableStatuses()),
-            any(LocalDateTime.class)
+            any(LocalDateTime.class),
+            any(Pageable.class)
         );
     }
 
     @Test
     void getLatestBatchShouldReturnNullWhenNoRecoverableBatchExists() {
-        when(batchRepository.findLatestRecoverableBatch(
+        when(batchRepository.findLatestRecoverableBatches(
             eq(7L),
             eq(recoverableStatuses()),
-            any(LocalDateTime.class)
-        )).thenReturn(Optional.empty());
+            any(LocalDateTime.class),
+            any(Pageable.class)
+        )).thenReturn(List.of());
 
         var actual = jobDraftService.getLatestBatch(7L);
 
