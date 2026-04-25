@@ -357,12 +357,18 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
         },
         () => {
           setLoading(false);
-          loadSessions();
+          void loadSessions();
         },
         (error: Error) => {
           console.error('流式查询失败:', error);
-          updateAssistantMessage(fullContent || error.message || '回答失败，请重试');
-          setErrorMessage(error.message || '回答失败，请重试');
+          if (fullContent.trim()) {
+            updateAssistantMessage(fullContent);
+            setErrorMessage(null);
+            void loadSessions();
+          } else {
+            updateAssistantMessage(error.message || '回答失败，请重试');
+            setErrorMessage(error.message || '回答失败，请重试');
+          }
           setLoading(false);
         }
       );
