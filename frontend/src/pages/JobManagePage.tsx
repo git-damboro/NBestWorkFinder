@@ -16,6 +16,7 @@ import {
   Sparkles,
   Target,
   Trash2,
+  X,
 } from 'lucide-react';
 import { jobApi } from '../api';
 import { historyApi, type ResumeListItem } from '../api/history';
@@ -143,6 +144,7 @@ export default function JobManagePage() {
   const [selectedJob, setSelectedJob] = useState<JobDetail | null>(null);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -177,6 +179,7 @@ export default function JobManagePage() {
     // 从简历详情页保存职位草稿后，优先聚焦刚创建的职位。
     selectedJobIdRef.current = routeSelectedJobId;
     setSelectedJobId(routeSelectedJobId);
+    setDetailModalOpen(true);
     navigate(location.pathname, { replace: true, state: null });
   }, [routeSelectedJobId, navigate, location.pathname]);
 
@@ -344,6 +347,12 @@ export default function JobManagePage() {
     setInterviewOpen(true);
   };
 
+  const openJobDetail = (jobId: number) => {
+    setActionError(null);
+    setSelectedJobId(jobId);
+    setDetailModalOpen(true);
+  };
+
   const handleRefresh = () => {
     void loadJobs(selectedJobIdRef.current);
   };
@@ -487,9 +496,9 @@ export default function JobManagePage() {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[360px,1fr]">
+      <div className="grid gap-6">
         <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <div className="mb-4 flex flex-col gap-3">
+          <div className="mb-4 grid gap-3 lg:grid-cols-[1fr,220px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -515,8 +524,13 @@ export default function JobManagePage() {
           </div>
 
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">职位列表</h2>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">职位列表</h2>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                点击职位卡片查看详情、匹配简历或发起定向面试
+              </p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-300">
               共 {filteredJobs.length} 条
             </span>
           </div>
@@ -561,7 +575,7 @@ export default function JobManagePage() {
           )}
 
           {!loadingList && !listError && filteredJobs.length > 0 && (
-            <div className="max-h-[720px] space-y-3 overflow-y-auto pr-1">
+            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {filteredJobs.map((job, index) => {
                 const active = job.id === selectedJobId;
 
@@ -572,8 +586,8 @@ export default function JobManagePage() {
                     initial={{ opacity: 0, x: -12 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.03 }}
-                    onClick={() => setSelectedJobId(job.id)}
-                    className={`w-full rounded-2xl border p-4 text-left transition-all ${
+                    onClick={() => openJobDetail(job.id)}
+                    className={`h-full w-full rounded-2xl border p-4 text-left transition-all ${
                       active
                         ? 'border-primary-500 bg-primary-50 shadow-sm dark:bg-primary-900/20'
                         : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/60'
@@ -635,162 +649,38 @@ export default function JobManagePage() {
             </div>
           )}
         </section>
-
-        <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          {loadingDetail && (
-            <div className="flex min-h-[520px] items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
-            </div>
-          )}
-
-          {!loadingDetail && detailError && (
-            <div className="flex min-h-[520px] items-center justify-center">
-              <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-500/70 dark:bg-red-900/30">
-                <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-500" />
-                <p className="text-sm text-red-700 dark:text-red-200">{detailError}</p>
-                {selectedJobId && (
-                  <button
-                    type="button"
-                    onClick={() => void loadJobDetail(selectedJobId)}
-                    className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-medium text-red-600 dark:bg-slate-800 dark:text-red-300"
-                  >
-                    重试加载详情
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!loadingDetail && !detailError && !selectedJob && (
-            <div className="flex min-h-[520px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
-              <Briefcase className="mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">请选择一个职位</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                左侧选择职位后，这里会展示详情、投递进度和简历匹配入口。
-              </p>
-            </div>
-          )}
-
-          {!loadingDetail && !detailError && selectedJob && (
-            <div className="space-y-6">
-              <div className="flex flex-col gap-4 border-b border-slate-100 pb-6 dark:border-slate-700 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${getStatusBadgeClass(selectedJob.applicationStatus)}`}
-                    >
-                      {jobStatusLabelMap[selectedJob.applicationStatus]}
-                    </span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">
-                      创建于 {formatDateTime(selectedJob.createdAt)}
-                    </span>
-                  </div>
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                    {selectedJob.title}
-                  </h2>
-                  <p className="mt-2 flex items-center gap-2 text-slate-500 dark:text-slate-400">
-                    <Building2 className="h-4 w-4" />
-                    {selectedJob.company}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={openEditDialog}
-                    className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                    编辑
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMatchOpen(true)}
-                    className="flex items-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-600"
-                  >
-                    <Target className="h-4 w-4" />
-                    简历匹配
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openDirectedInterviewDialog}
-                    className="flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-600"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    定向面试
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(selectedJob)}
-                    className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-300"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    删除
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <DetailCard
-                  icon={MapPin}
-                  label="工作地点"
-                  value={selectedJob.location || '未填写'}
-                />
-                <DetailCard
-                  icon={Sparkles}
-                  label="薪资范围"
-                  value={formatSalaryRange(selectedJob.salaryMin, selectedJob.salaryMax)}
-                />
-                <DetailCard
-                  icon={CalendarDays}
-                  label="最近更新"
-                  value={formatDateTime(selectedJob.updatedAt)}
-                />
-              </div>
-
-              <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
-                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  职位描述
-                </h3>
-                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
-                  {selectedJob.description}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
-                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  技术标签
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedJob.techTags.length > 0 ? (
-                    selectedJob.techTags.map((tag) => (
-                      <span
-                        key={`${selectedJob.id}-${tag}`}
-                        className="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-300"
-                      >
-                        {tag}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-slate-400 dark:text-slate-500">
-                      暂无技术标签，后端会根据职位描述自动提取。
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
-                <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  跟进备注
-                </h3>
-                <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
-                  {selectedJob.notes || '暂无备注，可用于记录投递渠道、面试进度和 follow-up 计划。'}
-                </p>
-              </div>
-            </div>
-          )}
-        </section>
       </div>
+
+      <JobDetailModal
+        open={detailModalOpen}
+        job={selectedJob}
+        loading={loadingDetail}
+        error={detailError}
+        onClose={() => setDetailModalOpen(false)}
+        onRetry={() => {
+          if (selectedJobId !== null) {
+            void loadJobDetail(selectedJobId);
+          }
+        }}
+        onEdit={() => {
+          setDetailModalOpen(false);
+          openEditDialog();
+        }}
+        onMatch={() => {
+          setDetailModalOpen(false);
+          setMatchOpen(true);
+        }}
+        onInterview={() => {
+          setDetailModalOpen(false);
+          openDirectedInterviewDialog();
+        }}
+        onDelete={() => {
+          if (selectedJob) {
+            setDetailModalOpen(false);
+            setDeleteTarget(selectedJob);
+          }
+        }}
+      />
 
       <JobFormDialog
         open={formOpen}
@@ -911,6 +801,259 @@ export default function JobManagePage() {
           ) : undefined
         }
       />
+    </div>
+  );
+}
+
+interface JobDetailModalProps {
+  open: boolean;
+  job: JobDetail | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onRetry: () => void;
+  onEdit: () => void;
+  onMatch: () => void;
+  onInterview: () => void;
+  onDelete: () => void;
+}
+
+function JobDetailModal({
+  open,
+  job,
+  loading,
+  error,
+  onClose,
+  onRetry,
+  onEdit,
+  onMatch,
+  onInterview,
+  onDelete,
+}: JobDetailModalProps) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button
+        type="button"
+        aria-label="关闭职位详情弹窗"
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full cursor-default bg-slate-950/50 backdrop-blur-sm"
+      />
+
+      <div className="pointer-events-none relative flex min-h-full items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.18 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="职位详情"
+          className="pointer-events-auto relative w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-slate-900"
+        >
+          <button
+            type="button"
+            aria-label="关闭职位详情"
+            onClick={onClose}
+            className="absolute right-4 top-4 z-10 rounded-full border border-slate-200 bg-white/90 p-2 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          {loading && (
+            <div className="flex min-h-[520px] items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="flex min-h-[520px] items-center justify-center px-6">
+              <div className="max-w-md rounded-2xl border border-red-200 bg-red-50 p-5 text-center dark:border-red-500/70 dark:bg-red-900/30">
+                <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-500" />
+                <p className="text-sm text-red-700 dark:text-red-200">{error}</p>
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-medium text-red-600 dark:bg-slate-800 dark:text-red-300"
+                >
+                  重试加载详情
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!loading && !error && !job && (
+            <div className="flex min-h-[520px] flex-col items-center justify-center px-6 text-center">
+              <Briefcase className="mb-3 h-10 w-10 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">正在准备职位详情</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                如果长时间没有响应，请关闭弹窗后重新选择职位。
+              </p>
+            </div>
+          )}
+
+          {!loading && !error && job && (
+            <div className="grid max-h-[90vh] min-h-[560px] lg:grid-cols-[320px,1fr]">
+              <aside className="min-h-0 overflow-y-auto border-b border-slate-100 bg-slate-50/80 p-6 dark:border-slate-800 dark:bg-slate-950/40 lg:border-b-0 lg:border-r">
+                <div className="mb-4 flex flex-wrap items-center gap-2 pr-12">
+                  <span
+                    className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${getStatusBadgeClass(job.applicationStatus)}`}
+                  >
+                    {jobStatusLabelMap[job.applicationStatus]}
+                  </span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                    创建于 {formatDateTime(job.createdAt)}
+                  </span>
+                </div>
+
+                <h2 className="text-2xl font-bold leading-tight text-slate-900 dark:text-white">
+                  {job.title}
+                </h2>
+                <p className="mt-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <Building2 className="h-4 w-4 flex-shrink-0" />
+                  <span>{job.company}</span>
+                </p>
+
+                <div className="mt-6 space-y-3 text-sm text-slate-600 dark:text-slate-300">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-slate-400" />
+                    <span>{job.location || '地点未填写'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-slate-400" />
+                    <span>{formatSalaryRange(job.salaryMin, job.salaryMax)}</span>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    技术标签
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {job.techTags.length > 0 ? (
+                      job.techTags.slice(0, 8).map((tag) => (
+                        <span
+                          key={`${job.id}-${tag}`}
+                          className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm dark:bg-slate-800 dark:text-slate-300"
+                        >
+                          {tag}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-slate-400 dark:text-slate-500">暂无技术标签</span>
+                    )}
+                    {job.techTags.length > 8 && (
+                      <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-400">
+                        +{job.techTags.length - 8}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-8 grid gap-3">
+                  <button
+                    type="button"
+                    onClick={onMatch}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+                  >
+                    <Target className="h-4 w-4" />
+                    简历匹配
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onInterview}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-600"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    定向面试
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onEdit}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    编辑职位
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-300"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    删除职位
+                  </button>
+                </div>
+              </aside>
+
+              <section className="min-h-0 overflow-y-auto p-6 lg:p-8">
+                <div className="mb-6 pr-12">
+                  <p className="text-sm font-medium text-primary-500">职位详情</p>
+                  <h3 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">
+                    JD、状态与跟进信息
+                  </h3>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <DetailCard icon={MapPin} label="工作地点" value={job.location || '未填写'} />
+                  <DetailCard
+                    icon={Sparkles}
+                    label="薪资范围"
+                    value={formatSalaryRange(job.salaryMin, job.salaryMax)}
+                  />
+                  <DetailCard
+                    icon={CalendarDays}
+                    label="最近更新"
+                    value={formatDateTime(job.updatedAt)}
+                  />
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    职位描述
+                  </h3>
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
+                    {job.description}
+                  </p>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    技术标签
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {job.techTags.length > 0 ? (
+                      job.techTags.map((tag) => (
+                        <span
+                          key={`${job.id}-${tag}`}
+                          className="rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-300"
+                        >
+                          {tag}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-400 dark:text-slate-500">
+                        暂无技术标签，后端会根据职位描述自动提取。
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    跟进备注
+                  </h3>
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
+                    {job.notes || '暂无备注，可用于记录投递渠道、面试进度和 follow-up 计划。'}
+                  </p>
+                </div>
+              </section>
+            </div>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 }
