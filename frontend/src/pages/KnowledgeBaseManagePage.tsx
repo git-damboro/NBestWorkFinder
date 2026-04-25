@@ -205,9 +205,17 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
     try {
       setRevectorizing(id);
       await knowledgeBaseApi.revectorize(id);
+      setDownloadFeedback({
+        type: 'success',
+        message: '已提交重向量化任务，请稍后查看状态。',
+      });
       await loadDataSilent();
     } catch (error) {
       console.error('重新向量化失败:', error);
+      setDownloadFeedback({
+        type: 'error',
+        message: getErrorMessage(error),
+      });
     } finally {
       setRevectorizing(null);
     }
@@ -606,10 +614,11 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
                       <button
                         onClick={() => handleRevectorize(kb.id)}
                         disabled={revectorizing === kb.id || kb.vectorStatus === 'PENDING' || kb.vectorStatus === 'PROCESSING'}
-                        className="p-2 text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-xs font-medium text-slate-500 transition-colors hover:bg-primary-50 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-300 dark:hover:bg-primary-900/30 dark:hover:text-primary-300"
                         title={kb.vectorStatus === 'PENDING' || kb.vectorStatus === 'PROCESSING' ? '向量化处理中' : '重新向量化'}
                       >
                         <RefreshCw className={`w-4 h-4 ${revectorizing === kb.id ? 'animate-spin' : ''}`} />
+                        {revectorizing === kb.id ? '提交中' : '重向量化'}
                       </button>
                       {/* 删除按钮 */}
                       <button
