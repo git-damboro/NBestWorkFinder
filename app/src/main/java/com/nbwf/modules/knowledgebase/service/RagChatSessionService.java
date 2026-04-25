@@ -71,6 +71,7 @@ public class RagChatSessionService {
     /**
      * 获取会话列表
      */
+    @Transactional(readOnly = true)
     public List<SessionListItemDTO> listSessions(Long userId) {
         return sessionRepository.findAllByUserIdOrderByPinnedAndUpdatedAtDesc(userId)
             .stream()
@@ -82,6 +83,7 @@ public class RagChatSessionService {
      * 获取会话详情（包含消息）
      * 分两次查询避免笛卡尔积问题
      */
+    @Transactional(readOnly = true)
     public SessionDetailDTO getSessionDetail(Long sessionId, Long userId) {
         // 先加载会话和知识库
         RagChatSessionEntity session = sessionRepository

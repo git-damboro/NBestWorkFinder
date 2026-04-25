@@ -602,17 +602,15 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
                           <Download className="w-4 h-4" />
                         )}
                       </button>
-                      {/* 重新向量化按钮（仅 FAILED 状态显示） */}
-                      {kb.vectorStatus === 'FAILED' && (
-                        <button
-                          onClick={() => handleRevectorize(kb.id)}
-                          disabled={revectorizing === kb.id}
-                          className="p-2 text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors disabled:opacity-50"
-                          title="重新向量化"
-                        >
-                          <RefreshCw className={`w-4 h-4 ${revectorizing === kb.id ? 'animate-spin' : ''}`} />
-                        </button>
-                      )}
+                      {/* 重新向量化按钮 */}
+                      <button
+                        onClick={() => handleRevectorize(kb.id)}
+                        disabled={revectorizing === kb.id || kb.vectorStatus === 'PENDING' || kb.vectorStatus === 'PROCESSING'}
+                        className="p-2 text-slate-400 hover:text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        title={kb.vectorStatus === 'PENDING' || kb.vectorStatus === 'PROCESSING' ? '向量化处理中' : '重新向量化'}
+                      >
+                        <RefreshCw className={`w-4 h-4 ${revectorizing === kb.id ? 'animate-spin' : ''}`} />
+                      </button>
                       {/* 删除按钮 */}
                       <button
                         onClick={() => setDeleteItem(kb)}

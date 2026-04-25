@@ -179,11 +179,29 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
     });
   };
 
-  const handleNewSession = () => {
-    setErrorMessage(null);
+  const resetCurrentSession = () => {
     setCurrentSessionId(null);
     setCurrentSessionTitle('');
     setMessages([]);
+  };
+
+  const handleNewSession = async () => {
+    setErrorMessage(null);
+    if (selectedKbIds.size === 0) {
+      setErrorMessage('请先选择至少一个知识库，再新建对话。');
+      return;
+    }
+
+    try {
+      const session = await ragChatApi.createSession(Array.from(selectedKbIds));
+      setCurrentSessionId(session.id);
+      setCurrentSessionTitle(session.title);
+      setMessages([]);
+      await loadSessions();
+    } catch (err) {
+      console.error('新建对话失败', err);
+      setErrorMessage(getErrorMessage(err));
+    }
   };
 
   const handleLoadSession = async (sessionId: number) => {
@@ -212,7 +230,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
       await ragChatApi.deleteSession(sessionDeleteConfirm.id);
       await loadSessions();
       if (currentSessionId === sessionDeleteConfirm.id) {
-        handleNewSession();
+        resetCurrentSession();
       }
       setSessionDeleteConfirm(null);
     } catch (err) {
@@ -430,7 +448,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-slate-800 dark:text-white">对话历史</h2>
               <motion.button
-                onClick={handleNewSession}
+                onClick={() => void handleNewSession()}
                 disabled={selectedKbIds.size === 0}
                 className="p-1.5 text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 whileHover={{ scale: 1.05 }}
@@ -815,7 +833,7 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
         open={!!sessionDeleteConfirm}
         item={sessionDeleteConfirm ? { id: 0, title: sessionDeleteConfirm.title } : null}
         itemType="对话"
-        onConfirm={handleDeleteSession}
+        onConfirm={() => void handleDeleteSession()}
         onCancel={() => setSessionDeleteConfirm(null)}
       />
 
