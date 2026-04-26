@@ -69,6 +69,10 @@ export function getAccessToken(): string | null {
   return loadAuthSession()?.accessToken ?? null;
 }
 
+export function getRefreshToken(): string | null {
+  return loadAuthSession()?.refreshToken ?? null;
+}
+
 export function subscribeAuthSessionChange(listener: () => void): () => void {
   if (typeof window === 'undefined') {
     return () => {};

@@ -1,5 +1,12 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
-import { clearAuthSession, getAccessToken } from '../auth/auth-storage';
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import {
+  clearAuthSession,
+  getAccessToken,
+  getRefreshToken,
+  saveAuthSession,
+  toAuthSession,
+} from '../auth/auth-storage';
+import type { AuthResponse, AuthSession } from '../types/auth';
 
 export interface Result<T = unknown> {
   code: number;
@@ -16,6 +23,15 @@ const instance: AxiosInstance = axios.create({
   baseURL,
   timeout: 60000,
 });
+
+const refreshInstance: AxiosInstance = axios.create({
+  baseURL,
+  timeout: 60000,
+});
+
+type RetryableRequestConfig = AxiosRequestConfig & { _authRetried?: boolean };
+
+let refreshPromise: Promise<AuthSession> | null = null;
 
 function hasCodeProperty(value: object): value is object & { code: unknown } {
   return 'code' in value;
@@ -66,6 +82,54 @@ export function handleAuthExpired(message = SESSION_EXPIRED_MESSAGE): Error {
   return new Error(message);
 }
 
+async function refreshAuthSession(): Promise<AuthSession> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    throw handleAuthExpired();
+  }
+
+  refreshPromise = refreshInstance.post<Result<AuthResponse>>('/api/auth/refresh', undefined, {
+    params: { refreshToken },
+  }).then((response) => {
+    const result = response.data;
+    if (!isResult(result) || result.code !== 200) {
+      throw handleAuthExpired(getResultMessage(result, SESSION_EXPIRED_MESSAGE));
+    }
+
+    const nextSession = toAuthSession(result.data);
+    saveAuthSession(nextSession);
+    return nextSession;
+  }).catch((error) => {
+    if (error instanceof Error && error.message === SESSION_EXPIRED_MESSAGE) {
+      throw error;
+    }
+    throw handleAuthExpired();
+  }).finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+}
+
+async function retryWithRefreshedSession(config: AxiosRequestConfig): Promise<AxiosResponse> {
+  const retryConfig = config as RetryableRequestConfig;
+  if (retryConfig._authRetried || retryConfig.url?.includes('/api/auth/refresh')) {
+    throw handleAuthExpired();
+  }
+
+  const nextSession = await refreshAuthSession();
+  retryConfig._authRetried = true;
+  retryConfig.headers = {
+    ...(retryConfig.headers ?? {}),
+    Authorization: `Bearer ${nextSession.accessToken}`,
+  };
+  return instance.request(retryConfig);
+}
+
 export function buildAuthHeaders(headers: HeadersInit = {}): Headers {
   const nextHeaders = new Headers(headers);
   const token = getAccessToken();
@@ -108,7 +172,7 @@ instance.interceptors.response.use(
         return response;
       }
       if (isAuthErrorCode(result.code)) {
-        return Promise.reject(handleAuthExpired(getResultMessage(result, SESSION_EXPIRED_MESSAGE)));
+        return retryWithRefreshedSession(response.config);
       }
       return Promise.reject(new Error(getResultMessage(result)));
     }
@@ -117,15 +181,15 @@ instance.interceptors.response.use(
   },
   async (error: AxiosError<unknown>) => {
     if (error.response) {
-      const { data, headers, status } = error.response;
+      const { config, data, headers, status } = error.response;
 
       if (status === 401 || status === 403) {
-        return Promise.reject(handleAuthExpired());
+        return retryWithRefreshedSession(config);
       }
 
       if (isResult(data)) {
         if (isAuthErrorCode(data.code)) {
-          return Promise.reject(handleAuthExpired(getResultMessage(data, SESSION_EXPIRED_MESSAGE)));
+          return retryWithRefreshedSession(config);
         }
         return Promise.reject(new Error(getResultMessage(data)));
       }
@@ -134,7 +198,7 @@ instance.interceptors.response.use(
         const blobResult = await parseBlobResult(data, getHeaderValue(headers['content-type']));
         if (isResult(blobResult)) {
           if (isAuthErrorCode(blobResult.code)) {
-            return Promise.reject(handleAuthExpired(getResultMessage(blobResult, SESSION_EXPIRED_MESSAGE)));
+            return retryWithRefreshedSession(config);
           }
           return Promise.reject(new Error(getResultMessage(blobResult)));
         }
@@ -197,7 +261,8 @@ export async function downloadBlob(url: string, config?: AxiosRequestConfig): Pr
 
   if (isResult(blobResult)) {
     if (isAuthErrorCode(blobResult.code)) {
-      throw handleAuthExpired(getResultMessage(blobResult, SESSION_EXPIRED_MESSAGE));
+      await refreshAuthSession();
+      return downloadBlob(url, config);
     }
     if (blobResult.code !== 200) {
       throw new Error(getResultMessage(blobResult, '下载失败'));

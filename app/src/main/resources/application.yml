@@ -130,4 +130,4 @@ app:
   jwt:
     secret: ${JWT_SECRET:NBestWorkFinderSecretKey2026ChangeInProduction!!}
     access-token-expiry: ${JWT_ACCESS_EXPIRY:900}        # 15分钟，单位秒
-    refresh-token-expiry: ${JWT_REFRESH_EXPIRY:604800}   # 7天，单位秒
+    refresh-token-expiry: ${JWT_REFRESH_EXPIRY:1209600}  # 14天，单位秒
