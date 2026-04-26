@@ -3,6 +3,7 @@ package com.nbwf.modules.job;
 import com.nbwf.common.result.Result;
 import com.nbwf.modules.aigeneration.model.AiGenerationTaskDTO;
 import com.nbwf.modules.job.model.*;
+import com.nbwf.modules.job.service.JobFollowUpService;
 import com.nbwf.modules.job.service.JobService;
 import com.nbwf.modules.jobdraft.model.JobDraftBatchCreatedDTO;
 import com.nbwf.modules.jobdraft.service.JobDraftService;
@@ -23,6 +24,7 @@ public class JobController {
 
     private final JobService jobService;
     private final JobDraftService jobDraftService;
+    private final JobFollowUpService jobFollowUpService;
 
     @Operation(summary = "录入职位（粘贴 JD）")
     @PostMapping
@@ -75,6 +77,21 @@ public class JobController {
                                      @RequestParam Long resumeId,
                                      @AuthenticationPrincipal Long userId) {
         return Result.success(jobService.match(id, resumeId, userId));
+    }
+
+    @Operation(summary = "查询职位投递跟进记录")
+    @GetMapping("/{id}/follow-ups")
+    public Result<List<JobFollowUpRecordDTO>> listFollowUps(@PathVariable Long id,
+                                                            @AuthenticationPrincipal Long userId) {
+        return Result.success(jobFollowUpService.list(id, userId));
+    }
+
+    @Operation(summary = "新增职位投递跟进记录")
+    @PostMapping("/{id}/follow-ups")
+    public Result<JobFollowUpRecordDTO> createFollowUp(@PathVariable Long id,
+                                                       @Valid @RequestBody CreateJobFollowUpRequest req,
+                                                       @AuthenticationPrincipal Long userId) {
+        return Result.success(jobFollowUpService.createManual(id, req, userId));
     }
 
     @Operation(summary = "根据简历生成职位草稿")

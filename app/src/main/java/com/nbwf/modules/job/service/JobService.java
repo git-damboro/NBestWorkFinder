@@ -40,6 +40,7 @@ public class JobService {
     private final AiGenerationStreamProducer aiGenerationStreamProducer;
     private final PlatformTransactionManager transactionManager;
     private final ObjectMapper objectMapper;
+    private final JobFollowUpService jobFollowUpService;
 
     @Transactional
     public JobDetailDTO create(CreateJobRequest req, Long userId) {
@@ -73,6 +74,7 @@ public class JobService {
     @Transactional
     public JobDetailDTO update(Long id, UpdateJobRequest req, Long userId) {
         JobEntity job = findOrThrow(id, userId);
+        JobApplicationStatus previousStatus = job.getApplicationStatus();
 
         boolean descriptionChanged = req.getDescription() != null
             && !req.getDescription().equals(job.getDescription());
@@ -89,6 +91,10 @@ public class JobService {
         if (descriptionChanged) {
             List<String> tags = extractTagsSafely(job.getTitle(), job.getDescription());
             job.setTechTags(joinTags(tags));
+        }
+
+        if (req.getApplicationStatus() != null && req.getApplicationStatus() != previousStatus) {
+            jobFollowUpService.recordStatusChange(job, previousStatus, req.getApplicationStatus());
         }
 
         return toDetailDTO(jobRepository.save(job));
