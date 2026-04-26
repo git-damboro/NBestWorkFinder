@@ -63,6 +63,15 @@ public class JobEntity {
     @Column(name = "jd_completeness", length = 40)
     private String jdCompleteness;
 
+    @Column(name = "applied_at")
+    private LocalDateTime appliedAt;
+
+    @Column(name = "last_follow_up_at")
+    private LocalDateTime lastFollowUpAt;
+
+    @Column(name = "next_follow_up_at")
+    private LocalDateTime nextFollowUpAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -129,6 +138,15 @@ public class JobEntity {
 
     public String getJdCompleteness() { return jdCompleteness; }
     public void setJdCompleteness(String jdCompleteness) { this.jdCompleteness = jdCompleteness; }
+
+    public LocalDateTime getAppliedAt() { return appliedAt; }
+    public void setAppliedAt(LocalDateTime appliedAt) { this.appliedAt = appliedAt; }
+
+    public LocalDateTime getLastFollowUpAt() { return lastFollowUpAt; }
+    public void setLastFollowUpAt(LocalDateTime lastFollowUpAt) { this.lastFollowUpAt = lastFollowUpAt; }
+
+    public LocalDateTime getNextFollowUpAt() { return nextFollowUpAt; }
+    public void setNextFollowUpAt(LocalDateTime nextFollowUpAt) { this.nextFollowUpAt = nextFollowUpAt; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

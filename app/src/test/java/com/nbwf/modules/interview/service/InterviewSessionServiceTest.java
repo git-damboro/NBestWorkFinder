@@ -75,6 +75,9 @@ class InterviewSessionServiceTest {
             JobApplicationStatus.APPLIED,
             "重点关注系统设计",
             now,
+            now,
+            now,
+            now,
             now
         );
         List<String> history = List.of("历史问题：请介绍 HashMap。");

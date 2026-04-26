@@ -12,5 +12,8 @@ public record JobListItemDTO(
     Integer salaryMax,
     List<String> techTags,
     JobApplicationStatus applicationStatus,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    LocalDateTime appliedAt,
+    LocalDateTime lastFollowUpAt,
+    LocalDateTime nextFollowUpAt
 ) {}

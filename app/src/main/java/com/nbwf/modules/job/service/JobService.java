@@ -297,7 +297,10 @@ public class JobService {
             job.getSalaryMax(),
             splitTags(job.getTechTags()),
             job.getApplicationStatus(),
-            job.getCreatedAt()
+            job.getCreatedAt(),
+            job.getAppliedAt(),
+            job.getLastFollowUpAt(),
+            job.getNextFollowUpAt()
         );
     }
 
@@ -314,7 +317,10 @@ public class JobService {
             job.getApplicationStatus(),
             job.getNotes(),
             job.getCreatedAt(),
-            job.getUpdatedAt()
+            job.getUpdatedAt(),
+            job.getAppliedAt(),
+            job.getLastFollowUpAt(),
+            job.getNextFollowUpAt()
         );
     }
 }

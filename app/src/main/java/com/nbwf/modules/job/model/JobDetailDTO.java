@@ -15,5 +15,8 @@ public record JobDetailDTO(
     JobApplicationStatus applicationStatus,
     String notes,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    LocalDateTime appliedAt,
+    LocalDateTime lastFollowUpAt,
+    LocalDateTime nextFollowUpAt
 ) {}
