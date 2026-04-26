@@ -124,6 +124,41 @@ function extractCurrentPageJob() {
     return bestText;
   }
 
+  function formatInjectedJobDescription(value) {
+    let text = cleanInjectedText(value)
+      .replace(/^微信扫码分享\s*举\s*报\s*/g, '')
+      .replace(/^职位描述\s*校招\s*/g, '')
+      .replace(/^职位描述\s*/g, '');
+
+    const stopWords = [
+      '竞争力分析',
+      '查看完整个人竞争力',
+      'BOSS 安全提示',
+      'BOSS直聘严禁',
+      '杭州 搜索',
+      '城市招聘',
+      '热门职位',
+      '推荐公司',
+      '热门企业',
+      '页面更新时间',
+    ];
+    for (const stopWord of stopWords) {
+      const index = text.indexOf(stopWord);
+      if (index >= 0) {
+        text = text.slice(0, index);
+      }
+    }
+
+    text = text.replace(/\s*([一-龥]{2,4})\s*(校招顾问|招聘顾问|HR)\s*$/g, '');
+
+    return text
+      .replace(/(职位描述[:：])\s*/g, '$1\n')
+      .replace(/(岗位职责[:：])\s*/g, '\n$1\n')
+      .replace(/\s*([1-9][0-9]*[、.])\s*/g, '\n$1')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   function parseInjectedBossJobId(value) {
     const match = value.match(/job_detail\/([^/?#.]+)/);
     return match?.[1] || undefined;
@@ -225,15 +260,15 @@ function extractCurrentPageJob() {
   ]);
   const description = getInjectedLongTextBySelectors([
     '.job-sec-text',
-    '.job-detail',
     '.job-detail-section',
+    '.job-detail .job-sec-text',
     '.detail-content',
     '.job-description',
-    '[class*="job-detail"]',
     '[class*="job-sec"]',
     '[class*="description"]',
   ]);
   const fallbackDescription = description || cleanInjectedText(document.body.innerText).slice(0, 4000);
+  const formattedDescription = formatInjectedJobDescription(fallbackDescription);
   const salary = parseInjectedSalaryText(salaryText);
 
   return {
@@ -245,8 +280,8 @@ function extractCurrentPageJob() {
     location,
     salaryText,
     ...salary,
-    description: fallbackDescription,
-    techTags: extractInjectedTechTags(`${title} ${fallbackDescription}`),
+    description: formattedDescription,
+    techTags: extractInjectedTechTags(`${title} ${formattedDescription}`),
   };
 }
 
