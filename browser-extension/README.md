@@ -9,13 +9,8 @@
 3. 在 Chrome 或 Edge 打开扩展管理页。
 4. 开启开发者模式。
 5. 选择“加载已解压的扩展程序”，目录选择 `browser-extension`。
-6. 登录 NBestWorkFinder，在浏览器控制台执行：
-
-```js
-JSON.parse(localStorage.getItem('nbwf_auth_session')).accessToken
-```
-
-7. 把得到的 `accessToken` 粘贴到插件弹窗的“登录 Token”里并保存。
+6. 登录 NBestWorkFinder，并保持前端页面打开。
+7. 打开插件弹窗，点击“从已登录前端读取 Token”。
 8. 打开 BOSS 直聘岗位详情页，点击“采集并导入当前岗位”。
 
 ## 第一版范围
@@ -39,4 +34,4 @@ JSON.parse(localStorage.getItem('nbwf_auth_session')).accessToken
 
 ## 注意
 
-当前插件需要手动粘贴登录 Token。后续可以优化为前端页面授权或一次性插件授权码，避免用户手动复制 Token。
+当前插件会从已打开并登录的前端页面读取 `nbwf_auth_session.accessToken`。如果导入时提示 401 或 403，通常是 Token 已过期，重新登录系统后再次点击“从已登录前端读取 Token”即可。

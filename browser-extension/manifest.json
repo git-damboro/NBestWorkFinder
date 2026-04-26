@@ -7,7 +7,7 @@
     "default_title": "导入岗位",
     "default_popup": "popup.html"
   },
-  "permissions": ["activeTab", "scripting", "storage"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
   "host_permissions": [
     "http://localhost:8080/*",
     "http://localhost:5173/*",

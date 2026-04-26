@@ -4,6 +4,7 @@ const DEFAULT_FRONTEND_BASE = 'http://localhost:5173';
 const apiBaseInput = document.getElementById('apiBase');
 const frontendBaseInput = document.getElementById('frontendBase');
 const accessTokenInput = document.getElementById('accessToken');
+const loadTokenButton = document.getElementById('loadToken');
 const saveConfigButton = document.getElementById('saveConfig');
 const importJobButton = document.getElementById('importJob');
 const openAppButton = document.getElementById('openApp');
@@ -325,10 +326,55 @@ async function saveConfig() {
   setStatus('配置已保存。', 'success');
 }
 
+function readTokenFromFrontendStorage() {
+  const raw = localStorage.getItem('nbwf_auth_session');
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw)?.accessToken || null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadTokenFromFrontend() {
+  const frontendBase = (frontendBaseInput.value.trim() || DEFAULT_FRONTEND_BASE).replace(/\/$/, '');
+  const frontendUrl = `${frontendBase}/*`;
+  setStatus('正在从已登录前端读取 Token...');
+
+  try {
+    const tabs = await chrome.tabs.query({ url: frontendUrl });
+    const tab = tabs[0];
+    if (!tab?.id) {
+      throw new Error(`没有找到已打开的前端页面，请先打开并登录 ${frontendBase}`);
+    }
+
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: readTokenFromFrontendStorage,
+    });
+    const token = result?.result;
+    if (!token) {
+      throw new Error('前端页面没有登录 Token，请先在系统里重新登录');
+    }
+
+    accessTokenInput.value = token;
+    await saveConfig();
+    setStatus('已读取并保存最新 Token。', 'success');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : '读取 Token 失败', 'error');
+  }
+}
+
 async function parseApiResult(response) {
   const rawText = await response.text();
   if (!rawText.trim()) {
-    throw new Error(`导入接口返回空响应，HTTP ${response.status}。请确认后端服务正常，且登录 Token 没有过期。`);
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`导入接口返回 HTTP ${response.status}。登录 Token 可能已过期，请重新登录系统后点击“从已登录前端读取 Token”。`);
+    }
+    throw new Error(`导入接口返回空响应，HTTP ${response.status}。请确认后端服务正常。`);
   }
 
   try {
@@ -394,6 +440,7 @@ async function openApp() {
 }
 
 saveConfigButton.addEventListener('click', () => void saveConfig());
+loadTokenButton.addEventListener('click', () => void loadTokenFromFrontend());
 importJobButton.addEventListener('click', () => void importJob());
 openAppButton.addEventListener('click', () => void openApp());
 
