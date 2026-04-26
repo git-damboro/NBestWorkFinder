@@ -1022,6 +1022,14 @@ function JobDetailModal({
                   </div>
                 </div>
 
+                <FollowUpTimeline
+                  job={job}
+                  followUps={followUps}
+                  loadingFollowUps={loadingFollowUps}
+                  followUpError={followUpError}
+                  onRetryFollowUps={onRetryFollowUps}
+                />
+
                 <div className="mt-6">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     技术标签
@@ -1149,14 +1157,6 @@ function JobDetailModal({
                     value={job.nextFollowUpAt ? formatDateTime(job.nextFollowUpAt) : '未设置'}
                   />
                 </div>
-
-                <FollowUpTimeline
-                  job={job}
-                  followUps={followUps}
-                  loadingFollowUps={loadingFollowUps}
-                  followUpError={followUpError}
-                  onRetryFollowUps={onRetryFollowUps}
-                />
 
                 <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
                   <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
