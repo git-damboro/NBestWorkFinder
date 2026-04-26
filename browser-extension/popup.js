@@ -96,50 +96,149 @@ function extractTechTags(text) {
 }
 
 function extractCurrentPageJob() {
+  function cleanInjectedText(value) {
+    return (value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function getInjectedTextBySelectors(selectors) {
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      const text = cleanInjectedText(element?.innerText || element?.textContent || '');
+      if (text) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  function getInjectedLongTextBySelectors(selectors) {
+    let bestText = '';
+    for (const selector of selectors) {
+      document.querySelectorAll(selector).forEach((element) => {
+        const text = cleanInjectedText(element.innerText || element.textContent || '');
+        if (text.length > bestText.length) {
+          bestText = text;
+        }
+      });
+    }
+    return bestText;
+  }
+
+  function parseInjectedBossJobId(value) {
+    const match = value.match(/job_detail\/([^/?#.]+)/);
+    return match?.[1] || undefined;
+  }
+
+  function parseInjectedSalaryText(value) {
+    const normalized = cleanInjectedText(value).toUpperCase();
+    const rangeMatch = normalized.match(/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*K/);
+    if (rangeMatch) {
+      return {
+        salaryMin: Math.round(Number(rangeMatch[1]) * 1000),
+        salaryMax: Math.round(Number(rangeMatch[2]) * 1000),
+      };
+    }
+    const singleMatch = normalized.match(/(\d+(?:\.\d+)?)\s*K/);
+    if (singleMatch) {
+      return {
+        salaryMin: Math.round(Number(singleMatch[1]) * 1000),
+        salaryMax: undefined,
+      };
+    }
+    return {};
+  }
+
+  function extractInjectedTechTags(text) {
+    const keywords = [
+      'Java',
+      'SpringBoot',
+      'Spring Boot',
+      'Python',
+      'C++',
+      'RAG',
+      'Agent',
+      '向量检索',
+      '知识库',
+      'SSE',
+      '流式',
+      '接口',
+      '后端',
+      '前端',
+      '全栈',
+      'PostgreSQL',
+      'Redis',
+      'AI应用',
+      '工程化',
+      '算法',
+      '机器学习',
+      '深度学习',
+      '视觉',
+      '导航',
+    ];
+    const lowerText = text.toLowerCase();
+    return Array.from(new Set(
+      keywords
+        .filter((keyword) => lowerText.includes(keyword.toLowerCase()))
+        .map((keyword) => keyword === 'Spring Boot' ? 'SpringBoot' : keyword),
+    )).slice(0, 12);
+  }
+
   const url = window.location.href;
   const host = window.location.hostname;
   const platform = host.includes('zhipin.com') ? 'BOSS' : 'WEB';
-  const title = getTextBySelectors([
+  const title = getInjectedTextBySelectors([
     '.job-title',
     '.job-name',
+    '.job-banner .name',
+    '.job-primary .name',
+    '.info-primary .name',
     '.name',
     '[class*="job-title"]',
     '[class*="jobName"]',
     'h1',
   ]);
-  const company = getTextBySelectors([
+  const company = getInjectedTextBySelectors([
+    '.job-banner .company',
+    '.job-primary .company',
+    '.info-company .name',
     '.company-info .name',
     '.company-name',
     '[class*="company-name"]',
     '[class*="companyName"]',
     '[class*="company"] a',
   ]);
-  const location = getTextBySelectors([
+  const location = getInjectedTextBySelectors([
+    '.job-banner .job-tags span',
+    '.job-primary .job-tags span',
     '.job-address',
     '.job-location',
     '.location-address',
     '[class*="location"]',
     '[class*="address"]',
   ]);
-  const salaryText = getTextBySelectors([
+  const salaryText = getInjectedTextBySelectors([
+    '.job-banner .salary',
+    '.job-primary .salary',
     '.salary',
     '.job-salary',
     '[class*="salary"]',
   ]);
-  const description = getLongTextBySelectors([
+  const description = getInjectedLongTextBySelectors([
     '.job-sec-text',
+    '.job-detail',
     '.job-detail-section',
     '.detail-content',
+    '.job-description',
     '[class*="job-detail"]',
     '[class*="job-sec"]',
     '[class*="description"]',
   ]);
-  const fallbackDescription = description || cleanText(document.body.innerText).slice(0, 4000);
-  const salary = parseSalaryText(salaryText);
+  const fallbackDescription = description || cleanInjectedText(document.body.innerText).slice(0, 4000);
+  const salary = parseInjectedSalaryText(salaryText);
 
   return {
     sourcePlatform: platform,
-    externalJobId: platform === 'BOSS' ? parseBossJobId(url) : undefined,
+    externalJobId: platform === 'BOSS' ? parseInjectedBossJobId(url) : undefined,
     sourceUrl: url,
     title,
     company,
@@ -147,7 +246,7 @@ function extractCurrentPageJob() {
     salaryText,
     ...salary,
     description: fallbackDescription,
-    techTags: extractTechTags(`${title} ${fallbackDescription}`),
+    techTags: extractInjectedTechTags(`${title} ${fallbackDescription}`),
   };
 }
 
