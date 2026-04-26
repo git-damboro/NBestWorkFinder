@@ -112,8 +112,12 @@ function extractCurrentPageJob() {
   }
 
   function getInjectedTextBySelectors(selectors) {
+    return getInjectedTextBySelectorsIn(document, selectors);
+  }
+
+  function getInjectedTextBySelectorsIn(root, selectors) {
     for (const selector of selectors) {
-      const element = document.querySelector(selector);
+      const element = root.querySelector(selector);
       const text = cleanInjectedText(element?.innerText || element?.textContent || '');
       if (text) {
         return text;
@@ -123,9 +127,13 @@ function extractCurrentPageJob() {
   }
 
   function getInjectedLongTextBySelectors(selectors) {
+    return getInjectedLongTextBySelectorsIn(document, selectors);
+  }
+
+  function getInjectedLongTextBySelectorsIn(root, selectors) {
     let bestText = '';
     for (const selector of selectors) {
-      document.querySelectorAll(selector).forEach((element) => {
+      root.querySelectorAll(selector).forEach((element) => {
         const text = cleanInjectedBlockText(element.innerText || element.textContent || '');
         if (text.length > bestText.length) {
           bestText = text;
@@ -238,8 +246,24 @@ function extractCurrentPageJob() {
   const url = window.location.href;
   const host = window.location.hostname;
   const platform = host.includes('zhipin.com') ? 'BOSS' : 'WEB';
-  const title = getInjectedTextBySelectors([
+  const detailRoot = document.querySelector('.job-detail-box')
+    || document.querySelector('.job-detail-container')
+    || document.querySelector('.job-card-wrapper')
+    || document.querySelector('.search-job-result .job-detail')
+    || document;
+  const selectedCard = document.querySelector('.job-card-box.active')
+    || document.querySelector('.job-card-box.selected')
+    || document.querySelector('.job-card-box:hover');
+  const title = getInjectedTextBySelectorsIn(detailRoot, [
+    '.job-name',
     '.job-title',
+    '.detail-title',
+    '.name',
+    'h1',
+    'h2',
+  ]) || getInjectedTextBySelectors([
+    '.job-card-box.active .job-name',
+    '.job-card-box.active .job-title',
     '.job-name',
     '.job-banner .name',
     '.job-primary .name',
@@ -249,7 +273,18 @@ function extractCurrentPageJob() {
     '[class*="jobName"]',
     'h1',
   ]);
-  const company = getInjectedTextBySelectors([
+  const company = getInjectedTextBySelectorsIn(detailRoot, [
+    '.company-name',
+    '.company-info .name',
+    '.info-company .name',
+    '[class*="company-name"]',
+    '[class*="companyName"]',
+    '[class*="company"] a',
+  ]) || (selectedCard ? getInjectedTextBySelectorsIn(selectedCard, [
+    '.company-name',
+    '.company-text',
+    '[class*="company"]',
+  ]) : '') || getInjectedTextBySelectors([
     '.job-banner .company',
     '.job-primary .company',
     '.info-company .name',
@@ -259,7 +294,17 @@ function extractCurrentPageJob() {
     '[class*="companyName"]',
     '[class*="company"] a',
   ]);
-  const location = getInjectedTextBySelectors([
+  const location = getInjectedTextBySelectorsIn(detailRoot, [
+    '.location-address',
+    '.job-address',
+    '.job-location',
+    '[class*="location"]',
+    '[class*="address"]',
+  ]) || (selectedCard ? getInjectedTextBySelectorsIn(selectedCard, [
+    '.job-area',
+    '.job-location',
+    '[class*="area"]',
+  ]) : '') || getInjectedTextBySelectors([
     '.job-banner .job-tags span',
     '.job-primary .job-tags span',
     '.job-address',
@@ -268,21 +313,37 @@ function extractCurrentPageJob() {
     '[class*="location"]',
     '[class*="address"]',
   ]);
-  const salaryText = getInjectedTextBySelectors([
+  const salaryText = getInjectedTextBySelectorsIn(detailRoot, [
+    '.salary',
+    '.job-salary',
+    '[class*="salary"]',
+  ]) || (selectedCard ? getInjectedTextBySelectorsIn(selectedCard, [
+    '.salary',
+    '.job-salary',
+    '[class*="salary"]',
+  ]) : '') || getInjectedTextBySelectors([
     '.job-banner .salary',
     '.job-primary .salary',
     '.salary',
     '.job-salary',
     '[class*="salary"]',
   ]);
-  const description = getInjectedLongTextBySelectors([
+  const description = getInjectedLongTextBySelectorsIn(detailRoot, [
     '.job-sec-text',
+    '.job-detail-body',
+    '.job-detail-content',
     '.job-detail-section',
     '.job-detail .job-sec-text',
     '.detail-content',
     '.job-description',
     '[class*="job-sec"]',
     '[class*="description"]',
+  ]) || getInjectedLongTextBySelectors([
+    '.job-sec-text',
+    '.job-detail-section',
+    '.job-detail .job-sec-text',
+    '.detail-content',
+    '.job-description',
   ]);
   const fallbackDescription = description || cleanInjectedBlockText(document.body.innerText).slice(0, 4000);
   const formattedDescription = formatInjectedJobDescription(fallbackDescription);
