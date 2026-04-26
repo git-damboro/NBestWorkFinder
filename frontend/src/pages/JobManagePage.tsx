@@ -9,7 +9,9 @@ import {
   ChevronDown,
   CheckCircle2,
   ClipboardList,
+  Copy,
   Edit3,
+  FileText,
   Loader2,
   MapPin,
   Plus,
@@ -177,6 +179,9 @@ export default function JobManagePage() {
   const [deliveryExperiences, setDeliveryExperiences] = useState<UserExperience[]>([]);
   const [loadingDeliveryExperiences, setLoadingDeliveryExperiences] = useState(false);
   const [deliveryPrepError, setDeliveryPrepError] = useState<string | null>(null);
+  const [deliveryResumes, setDeliveryResumes] = useState<ResumeListItem[]>([]);
+  const [loadingDeliveryResumes, setLoadingDeliveryResumes] = useState(false);
+  const [deliveryResumeError, setDeliveryResumeError] = useState<string | null>(null);
 
   // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
   const selectedJobIdRef = useRef<number | null>(null);
@@ -226,6 +231,21 @@ export default function JobManagePage() {
       setDeliveryPrepError(getErrorMessage(error));
     } finally {
       setLoadingDeliveryExperiences(false);
+    }
+  }, []);
+
+  const loadDeliveryResumes = useCallback(async () => {
+    setLoadingDeliveryResumes(true);
+    setDeliveryResumeError(null);
+
+    try {
+      const data = await historyApi.getResumes();
+      setDeliveryResumes(data);
+    } catch (error) {
+      setDeliveryResumes([]);
+      setDeliveryResumeError(getErrorMessage(error));
+    } finally {
+      setLoadingDeliveryResumes(false);
     }
   }, []);
 
@@ -406,6 +426,7 @@ export default function JobManagePage() {
     setDeliveryPrepError(null);
     setDeliveryPrepOpen(true);
     void loadDeliveryExperiences();
+    void loadDeliveryResumes();
   };
 
   const openJobDetail = (jobId: number) => {
@@ -829,10 +850,14 @@ export default function JobManagePage() {
         open={deliveryPrepOpen}
         job={selectedJob}
         experiences={deliveryExperiences}
+        resumes={deliveryResumes}
         loadingExperiences={loadingDeliveryExperiences}
+        loadingResumes={loadingDeliveryResumes}
         error={deliveryPrepError}
+        resumeError={deliveryResumeError}
         onClose={() => setDeliveryPrepOpen(false)}
         onRetry={() => void loadDeliveryExperiences()}
+        onRetryResumes={() => void loadDeliveryResumes()}
         onOpenExperiences={() => {
           setDeliveryPrepOpen(false);
           navigate('/profile/experiences');
@@ -1276,27 +1301,101 @@ interface DeliveryPrepDialogProps {
   open: boolean;
   job: JobDetail | null;
   experiences: UserExperience[];
+  resumes: ResumeListItem[];
   loadingExperiences: boolean;
+  loadingResumes: boolean;
   error: string | null;
+  resumeError: string | null;
   onClose: () => void;
   onRetry: () => void;
+  onRetryResumes: () => void;
   onOpenExperiences: () => void;
   onMatch: () => void;
   onMarkApplied: () => void;
+}
+
+function sortResumesByLatest(resumes: ResumeListItem[]) {
+  return [...resumes].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+}
+
+function shortenText(value: string, maxLength = 80) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+function buildBossOpenerDraft(job: JobDetail, resume: ResumeListItem | null, experiences: UserExperience[]) {
+  const jobTags = job.techTags.slice(0, 4).join('、');
+  const experienceLines = experiences.slice(0, 2).map((item) => `- ${item.title}：${shortenText(item.content)}`);
+  const salary = formatSalaryRange(job.salaryMin, job.salaryMax);
+
+  return [
+    '您好，我对这个岗位比较感兴趣，想进一步沟通一下。',
+    `我关注到贵司的「${job.title}」岗位，岗位方向和我的求职目标比较匹配。`,
+    resume
+      ? `我这边准备使用「${resume.filename}」这份简历投递，方便的话可以先帮忙看一下匹配度。`
+      : '我这边可以先发一份简历给您，方便的话想了解一下岗位匹配度。',
+    jobTags ? `从 JD 看，岗位重点涉及 ${jobTags}，这些方向我比较关注。` : null,
+    salary !== '薪资未填写' ? `我也留意到薪资范围是 ${salary}，后续可以结合岗位要求进一步沟通。` : null,
+    experienceLines.length > 0
+      ? `补充几个和岗位相关的经历点：\n${experienceLines.join('\n')}`
+      : '我也可以补充介绍一下自己的项目经历和技术背景，便于您判断是否匹配。',
+    '如果岗位还在招聘中，希望可以获得一次沟通机会，谢谢。',
+  ].filter(Boolean).join('\n\n');
 }
 
 function DeliveryPrepDialog({
   open,
   job,
   experiences,
+  resumes,
   loadingExperiences,
+  loadingResumes,
   error,
+  resumeError,
   onClose,
   onRetry,
+  onRetryResumes,
   onOpenExperiences,
   onMatch,
   onMarkApplied,
 }: DeliveryPrepDialogProps) {
+  const sortedResumes = useMemo(() => sortResumesByLatest(resumes), [resumes]);
+  const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
+  const [openerDraft, setOpenerDraft] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setSelectedResumeId(sortedResumes[0]?.id ?? null);
+  }, [open, sortedResumes]);
+
+  const selectedResume = useMemo(
+    () => sortedResumes.find((resume) => resume.id === selectedResumeId) ?? null,
+    [sortedResumes, selectedResumeId],
+  );
+
+  const generateOpenerDraft = useCallback(() => {
+    if (!job) {
+      return;
+    }
+    setOpenerDraft(buildBossOpenerDraft(job, selectedResume, experiences));
+    setCopied(false);
+    setCopyError(null);
+  }, [job, selectedResume, experiences]);
+
+  useEffect(() => {
+    if (!open || !job) {
+      return;
+    }
+    generateOpenerDraft();
+  }, [open, job, generateOpenerDraft]);
+
   if (!open || !job) {
     return null;
   }
@@ -1304,11 +1403,12 @@ function DeliveryPrepDialog({
   const hasFullJd = job.description.trim().length >= 80;
   const hasTechTags = job.techTags.length > 0;
   const hasEnabledExperience = experiences.length > 0;
+  const hasSelectedResume = selectedResume !== null;
   const alreadyApplied = job.applicationStatus === 'APPLIED'
     || job.applicationStatus === 'INTERVIEWING'
     || job.applicationStatus === 'OFFERED'
     || job.applicationStatus === 'REJECTED';
-  const readyCount = [hasFullJd, hasTechTags, hasEnabledExperience].filter(Boolean).length;
+  const readyCount = [hasFullJd, hasTechTags, hasSelectedResume].filter(Boolean).length;
 
   const checks = [
     {
@@ -1322,11 +1422,26 @@ function DeliveryPrepDialog({
       hint: hasTechTags ? `已识别 ${job.techTags.length} 个技术标签。` : '暂未识别技术标签，后续匹配质量会受影响。',
     },
     {
-      label: '我的经历已准备',
-      ready: hasEnabledExperience,
-      hint: hasEnabledExperience ? `已启用 ${experiences.length} 条经历素材。` : '建议先维护自我介绍、项目或技能亮点。',
+      label: '投递简历已选择',
+      ready: hasSelectedResume,
+      hint: hasSelectedResume ? `当前使用「${selectedResume.filename}」。` : '没有可用简历时仍可先生成基础开场白。',
     },
   ];
+
+  const copyOpenerDraft = async () => {
+    if (!openerDraft.trim()) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(openerDraft);
+      setCopied(true);
+      setCopyError(null);
+    } catch {
+      setCopied(false);
+      setCopyError('复制失败，请手动选中文案复制。');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[60]">
@@ -1371,7 +1486,7 @@ function DeliveryPrepDialog({
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
                 <p className="text-sm text-slate-500 dark:text-slate-400">准备完成度</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{readyCount}/3</p>
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">用于判断是否适合生成开场白</p>
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">职位、标签和简历越完整越好</p>
               </div>
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
                 <p className="text-sm text-slate-500 dark:text-slate-400">当前状态</p>
@@ -1383,14 +1498,60 @@ function DeliveryPrepDialog({
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-                <p className="text-sm text-slate-500 dark:text-slate-400">可用经历素材</p>
-                <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{experiences.length}</p>
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">只统计已启用的“我的经历”</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">选中简历</p>
+                <p className="mt-2 truncate text-lg font-bold text-slate-900 dark:text-white">
+                  {selectedResume?.filename ?? '暂无简历'}
+                </p>
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">默认使用最新上传简历</p>
               </div>
             </div>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-[1fr,360px]">
               <section className="space-y-4">
+                <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">选择投递简历</h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    默认选择最新上传的简历，生成开场白前可以手动切换。
+                  </p>
+
+                  {loadingResumes && (
+                    <div className="mt-4 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      正在加载简历列表...
+                    </div>
+                  )}
+
+                  {!loadingResumes && resumeError && (
+                    <button
+                      type="button"
+                      onClick={onRetryResumes}
+                      className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/60 dark:bg-red-900/20 dark:text-red-200"
+                    >
+                      {resumeError}，点击重试
+                    </button>
+                  )}
+
+                  {!loadingResumes && !resumeError && sortedResumes.length === 0 && (
+                    <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                      还没有可用简历。当前仍可生成基础开场白，后续建议先上传简历。
+                    </div>
+                  )}
+
+                  {!loadingResumes && !resumeError && sortedResumes.length > 0 && (
+                    <select
+                      value={selectedResumeId ?? ''}
+                      onChange={(event) => setSelectedResumeId(Number(event.target.value))}
+                      className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-primary-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    >
+                      {sortedResumes.map((resume, index) => (
+                        <option key={resume.id} value={resume.id}>
+                          {index === 0 ? '最新 · ' : ''}{resume.filename} · 上传于 {formatDateOnly(resume.uploadedAt)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
                 <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
                   <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">准备检查</h3>
                   <div className="mt-4 space-y-3">
@@ -1413,7 +1574,7 @@ function DeliveryPrepDialog({
                 <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
                   <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">已启用经历素材</h3>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    后续 Boss 开场白生成会优先引用这些素材。
+                    我的经历是增强材料，没有也不阻塞生成。
                   </p>
 
                   {loadingExperiences && (
@@ -1460,6 +1621,58 @@ function DeliveryPrepDialog({
                         </article>
                       ))}
                     </div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-primary-100 bg-primary-50/30 p-5 dark:border-primary-800/60 dark:bg-primary-900/10">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-100">
+                        <FileText className="h-4 w-4 text-primary-500" />
+                        Boss 开场白草稿
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        第一版按职位信息、选中简历和启用经历拼接，可手动编辑后复制。
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={generateOpenerDraft}
+                        className="rounded-xl border border-primary-200 bg-white px-3 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-50 dark:border-primary-700/60 dark:bg-slate-800 dark:text-primary-200"
+                      >
+                        重新生成
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void copyOpenerDraft()}
+                        disabled={!openerDraft.trim()}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-primary-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Copy className="h-4 w-4" />
+                        {copied ? '已复制' : '复制草稿'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <textarea
+                    value={openerDraft}
+                    onChange={(event) => {
+                      setOpenerDraft(event.target.value);
+                      setCopied(false);
+                      setCopyError(null);
+                    }}
+                    className="mt-4 min-h-72 w-full resize-y rounded-2xl border border-primary-100 bg-white px-4 py-3 text-sm leading-7 text-slate-700 outline-none transition-colors focus:border-primary-400 dark:border-primary-800/60 dark:bg-slate-900 dark:text-slate-100"
+                    placeholder="点击“重新生成”创建开场白草稿"
+                  />
+
+                  {!hasEnabledExperience && (
+                    <p className="mt-3 text-xs text-amber-600 dark:text-amber-300">
+                      当前没有启用的“我的经历”，已生成基础话术；补充经历后文案会更贴近你本人。
+                    </p>
+                  )}
+                  {copyError && (
+                    <p className="mt-3 text-xs text-red-600 dark:text-red-300">{copyError}</p>
                   )}
                 </div>
               </section>
