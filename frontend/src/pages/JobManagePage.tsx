@@ -7,6 +7,7 @@ import {
   Building2,
   CalendarDays,
   ChevronDown,
+  CheckCircle2,
   ClipboardList,
   Edit3,
   Loader2,
@@ -19,7 +20,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { jobApi, jobFollowUpApi } from '../api';
+import { jobApi, jobFollowUpApi, userExperienceApi } from '../api';
 import { historyApi, type ResumeListItem } from '../api/history';
 import { getErrorMessage } from '../api/request';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -32,6 +33,8 @@ import { jobFollowUpTypeLabelMap } from '../types/job-follow-up';
 import type { InterviewJobTarget } from '../types/interview';
 import type { CreateJobForm, JobApplicationStatus, JobDetail, JobListItem, UpdateJobForm } from '../types/job';
 import { jobStatusLabelMap, jobStatusOptions } from '../types/job';
+import type { UserExperience } from '../types/user-experience';
+import { userExperienceTypeLabelMap } from '../types/user-experience';
 import { formatDateOnly, formatDateTime } from '../utils/date';
 
 type StatusFilter = JobApplicationStatus | 'ALL';
@@ -170,6 +173,10 @@ export default function JobManagePage() {
   const [followUpError, setFollowUpError] = useState<string | null>(null);
   const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [deliveryPrepOpen, setDeliveryPrepOpen] = useState(false);
+  const [deliveryExperiences, setDeliveryExperiences] = useState<UserExperience[]>([]);
+  const [loadingDeliveryExperiences, setLoadingDeliveryExperiences] = useState(false);
+  const [deliveryPrepError, setDeliveryPrepError] = useState<string | null>(null);
 
   // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
   const selectedJobIdRef = useRef<number | null>(null);
@@ -204,6 +211,21 @@ export default function JobManagePage() {
       setFollowUpError(getErrorMessage(error));
     } finally {
       setLoadingFollowUps(false);
+    }
+  }, []);
+
+  const loadDeliveryExperiences = useCallback(async () => {
+    setLoadingDeliveryExperiences(true);
+    setDeliveryPrepError(null);
+
+    try {
+      const data = await userExperienceApi.list(true);
+      setDeliveryExperiences(data);
+    } catch (error) {
+      setDeliveryExperiences([]);
+      setDeliveryPrepError(getErrorMessage(error));
+    } finally {
+      setLoadingDeliveryExperiences(false);
     }
   }, []);
 
@@ -374,6 +396,16 @@ export default function JobManagePage() {
 
     setInterviewError(null);
     setInterviewOpen(true);
+  };
+
+  const openDeliveryPrepDialog = () => {
+    if (!selectedJob) {
+      return;
+    }
+
+    setDeliveryPrepError(null);
+    setDeliveryPrepOpen(true);
+    void loadDeliveryExperiences();
   };
 
   const openJobDetail = (jobId: number) => {
@@ -738,6 +770,10 @@ export default function JobManagePage() {
           }
         }}
         onAddFollowUp={() => setFollowUpDialogOpen(true)}
+        onPrepareDelivery={() => {
+          setDetailModalOpen(false);
+          openDeliveryPrepDialog();
+        }}
         onChangeStatus={(status) => void updateSelectedJobStatus(status)}
         onEdit={() => {
           setDetailModalOpen(false);
@@ -787,6 +823,25 @@ export default function JobManagePage() {
         loading={savingFollowUp}
         onCancel={() => setFollowUpDialogOpen(false)}
         onSubmit={(data) => void handleCreateFollowUp(data)}
+      />
+
+      <DeliveryPrepDialog
+        open={deliveryPrepOpen}
+        job={selectedJob}
+        experiences={deliveryExperiences}
+        loadingExperiences={loadingDeliveryExperiences}
+        error={deliveryPrepError}
+        onClose={() => setDeliveryPrepOpen(false)}
+        onRetry={() => void loadDeliveryExperiences()}
+        onOpenExperiences={() => {
+          setDeliveryPrepOpen(false);
+          navigate('/profile/experiences');
+        }}
+        onMatch={() => {
+          setDeliveryPrepOpen(false);
+          setMatchOpen(true);
+        }}
+        onMarkApplied={() => void updateSelectedJobStatus('APPLIED')}
       />
 
       <ConfirmDialog
@@ -901,6 +956,7 @@ interface JobDetailModalProps {
   onRetry: () => void;
   onRetryFollowUps: () => void;
   onAddFollowUp: () => void;
+  onPrepareDelivery: () => void;
   onChangeStatus: (status: JobApplicationStatus) => void;
   onEdit: () => void;
   onMatch: () => void;
@@ -920,6 +976,7 @@ function JobDetailModal({
   onRetry,
   onRetryFollowUps,
   onAddFollowUp,
+  onPrepareDelivery,
   onChangeStatus,
   onEdit,
   onMatch,
@@ -1057,6 +1114,14 @@ function JobDetailModal({
                 </div>
 
                 <div className="mt-8 grid gap-3">
+                  <button
+                    type="button"
+                    onClick={onPrepareDelivery}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    准备投递
+                  </button>
                   <button
                     type="button"
                     onClick={onAddFollowUp}
@@ -1201,6 +1266,244 @@ function JobDetailModal({
               </section>
             </div>
           )}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+interface DeliveryPrepDialogProps {
+  open: boolean;
+  job: JobDetail | null;
+  experiences: UserExperience[];
+  loadingExperiences: boolean;
+  error: string | null;
+  onClose: () => void;
+  onRetry: () => void;
+  onOpenExperiences: () => void;
+  onMatch: () => void;
+  onMarkApplied: () => void;
+}
+
+function DeliveryPrepDialog({
+  open,
+  job,
+  experiences,
+  loadingExperiences,
+  error,
+  onClose,
+  onRetry,
+  onOpenExperiences,
+  onMatch,
+  onMarkApplied,
+}: DeliveryPrepDialogProps) {
+  if (!open || !job) {
+    return null;
+  }
+
+  const hasFullJd = job.description.trim().length >= 80;
+  const hasTechTags = job.techTags.length > 0;
+  const hasEnabledExperience = experiences.length > 0;
+  const alreadyApplied = job.applicationStatus === 'APPLIED'
+    || job.applicationStatus === 'INTERVIEWING'
+    || job.applicationStatus === 'OFFERED'
+    || job.applicationStatus === 'REJECTED';
+  const readyCount = [hasFullJd, hasTechTags, hasEnabledExperience].filter(Boolean).length;
+
+  const checks = [
+    {
+      label: '岗位 JD 已补全',
+      ready: hasFullJd,
+      hint: hasFullJd ? '岗位描述可用于生成更贴合的开场白。' : '当前 JD 偏短，建议先补全岗位详情。',
+    },
+    {
+      label: '岗位标签已提取',
+      ready: hasTechTags,
+      hint: hasTechTags ? `已识别 ${job.techTags.length} 个技术标签。` : '暂未识别技术标签，后续匹配质量会受影响。',
+    },
+    {
+      label: '我的经历已准备',
+      ready: hasEnabledExperience,
+      hint: hasEnabledExperience ? `已启用 ${experiences.length} 条经历素材。` : '建议先维护自我介绍、项目或技能亮点。',
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <button
+        type="button"
+        aria-label="关闭投递准备面板"
+        onClick={onClose}
+        className="absolute inset-0 h-full w-full cursor-default bg-slate-950/50 backdrop-blur-sm"
+      />
+
+      <div className="pointer-events-none relative flex min-h-full items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.18 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="准备投递"
+          className="pointer-events-auto relative h-[calc(100vh-2rem)] max-h-[860px] w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-slate-900"
+        >
+          <button
+            type="button"
+            aria-label="关闭准备投递"
+            onClick={onClose}
+            className="absolute right-4 top-4 z-10 rounded-full border border-slate-200 bg-white/90 p-2 text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div className="h-full overflow-y-auto p-6 lg:p-8">
+            <div className="pr-12">
+              <p className="text-sm font-medium text-emerald-600 dark:text-emerald-300">辅助投递准备</p>
+              <h2 className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+                {job.title}
+              </h2>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                {job.company} · {job.location || '地点未填写'} · {formatSalaryRange(job.salaryMin, job.salaryMax)}
+              </p>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-sm text-slate-500 dark:text-slate-400">准备完成度</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{readyCount}/3</p>
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">用于判断是否适合生成开场白</p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-sm text-slate-500 dark:text-slate-400">当前状态</p>
+                <p className="mt-2 text-lg font-bold text-slate-900 dark:text-white">
+                  {jobStatusLabelMap[job.applicationStatus]}
+                </p>
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                  {alreadyApplied ? '该职位已有投递后状态。' : '尚未标记投递。'}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-sm text-slate-500 dark:text-slate-400">可用经历素材</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{experiences.length}</p>
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">只统计已启用的“我的经历”</p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[1fr,360px]">
+              <section className="space-y-4">
+                <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">准备检查</h3>
+                  <div className="mt-4 space-y-3">
+                    {checks.map((check) => (
+                      <div key={check.label} className="flex gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+                        <CheckCircle2
+                          className={`mt-0.5 h-5 w-5 flex-shrink-0 ${
+                            check.ready ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-600'
+                          }`}
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{check.label}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{check.hint}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">已启用经历素材</h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    后续 Boss 开场白生成会优先引用这些素材。
+                  </p>
+
+                  {loadingExperiences && (
+                    <div className="mt-4 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      正在加载我的经历...
+                    </div>
+                  )}
+
+                  {!loadingExperiences && error && (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/60 dark:bg-red-900/20 dark:text-red-200"
+                    >
+                      {error}，点击重试
+                    </button>
+                  )}
+
+                  {!loadingExperiences && !error && experiences.length === 0 && (
+                    <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                      还没有启用的经历素材。建议先补充“自我介绍”“项目经历”或“技能亮点”。
+                    </div>
+                  )}
+
+                  {!loadingExperiences && !error && experiences.length > 0 && (
+                    <div className="mt-4 space-y-3">
+                      {experiences.map((item) => (
+                        <article key={item.id} className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-300">
+                              {userExperienceTypeLabelMap[item.type]}
+                            </span>
+                            {item.tags.slice(0, 3).map((tag) => (
+                              <span key={`${item.id}-${tag}`} className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{item.title}</p>
+                          <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-400">
+                            {item.content}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <aside className="space-y-4">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 dark:border-emerald-800/60 dark:bg-emerald-900/10">
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">下一步操作</h3>
+                  <div className="mt-4 grid gap-3">
+                    <button
+                      type="button"
+                      onClick={onMatch}
+                      className="rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+                    >
+                      先做简历匹配
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onOpenExperiences}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      维护我的经历
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onMarkApplied}
+                      disabled={alreadyApplied}
+                      className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {alreadyApplied ? '已进入投递流程' : '标记已投递'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">第一版范围</h3>
+                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    <li>· 汇总职位和已启用经历素材。</li>
+                    <li>· 检查 JD、标签、个人素材是否准备好。</li>
+                    <li>· 暂不自动生成 Boss 开场白，下一步再接 AI。</li>
+                  </ul>
+                </div>
+              </aside>
+            </div>
+          </div>
         </motion.div>
       </div>
     </div>
