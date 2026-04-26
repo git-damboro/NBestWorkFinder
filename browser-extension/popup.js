@@ -161,11 +161,17 @@ async function extractFromActiveTab() {
   if (!tab?.id) {
     throw new Error('未找到当前标签页');
   }
+  if (!tab.url || !/^https?:\/\//.test(tab.url)) {
+    throw new Error('当前标签页不是网页，请先打开 BOSS 岗位详情页再导入');
+  }
 
   const [result] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: extractCurrentPageJob,
   });
+  if (!result?.result) {
+    throw new Error('无法读取当前页面内容，请刷新岗位页后重试');
+  }
   return result.result;
 }
 
@@ -201,6 +207,9 @@ async function importJob() {
   try {
     await saveConfig();
     const job = await extractFromActiveTab();
+    if (!job) {
+      throw new Error('未采集到岗位信息，请确认当前标签页是岗位详情页');
+    }
     if (!job.title || !job.company || !job.description) {
       throw new Error('未识别到完整岗位信息，请确认当前页面是岗位详情页');
     }
