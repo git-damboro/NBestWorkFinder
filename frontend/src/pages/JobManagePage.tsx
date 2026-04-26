@@ -1326,24 +1326,31 @@ function shortenText(value: string, maxLength = 80) {
   return `${normalized.slice(0, maxLength)}...`;
 }
 
+function normalizeOpenerText(value: string) {
+  return value
+    .replace(/[「」『』“”"《》（）()]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/([\u4e00-\u9fa5])\s+([A-Za-z0-9])/g, '$1$2')
+    .replace(/([A-Za-z0-9])\s+([\u4e00-\u9fa5])/g, '$1$2')
+    .replace(/[。！？!?]+$/g, '')
+    .trim();
+}
+
 function buildBossOpenerDraft(job: JobDetail, resume: ResumeListItem | null, experiences: UserExperience[]) {
   const jobTags = job.techTags.slice(0, 4).join('、');
-  const experienceLines = experiences.slice(0, 2).map((item) => `- ${item.title}：${shortenText(item.content)}`);
-  const salary = formatSalaryRange(job.salaryMin, job.salaryMax);
+  const primaryExperience = experiences[0] ? shortenText(experiences[0].content, 58) : null;
+  const secondaryExperience = experiences[1] ? shortenText(experiences[1].content, 42) : null;
+  const resumeText = resume ? '我会用当前选中的简历投递' : '我可以补充发送简历';
 
-  return [
-    '您好，我对这个岗位比较感兴趣，想进一步沟通一下。',
-    `我关注到贵司的「${job.title}」岗位，岗位方向和我的求职目标比较匹配。`,
-    resume
-      ? `我这边准备使用「${resume.filename}」这份简历投递，方便的话可以先帮忙看一下匹配度。`
-      : '我这边可以先发一份简历给您，方便的话想了解一下岗位匹配度。',
-    jobTags ? `从 JD 看，岗位重点涉及 ${jobTags}，这些方向我比较关注。` : null,
-    salary !== '薪资未填写' ? `我也留意到薪资范围是 ${salary}，后续可以结合岗位要求进一步沟通。` : null,
-    experienceLines.length > 0
-      ? `补充几个和岗位相关的经历点：\n${experienceLines.join('\n')}`
-      : '我也可以补充介绍一下自己的项目经历和技术背景，便于您判断是否匹配。',
-    '如果岗位还在招聘中，希望可以获得一次沟通机会，谢谢。',
-  ].filter(Boolean).join('\n\n');
+  const parts = [
+    `您好，我主要关注${job.title}相关方向，和这个岗位的要求比较匹配`,
+    jobTags ? `尤其是${jobTags}这些方向我有持续积累` : '也比较关注岗位需要的后端能力和业务落地经验',
+    primaryExperience ? `之前有过${primaryExperience}相关经历` : null,
+    secondaryExperience ? `也补充做过${secondaryExperience}` : null,
+    `${resumeText}，想进一步了解一下岗位情况，方便的话可以沟通一下吗`,
+  ];
+
+  return normalizeOpenerText(parts.filter(Boolean).join('，'));
 }
 
 function DeliveryPrepDialog({
