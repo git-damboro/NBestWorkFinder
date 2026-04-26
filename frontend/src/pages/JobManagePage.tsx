@@ -946,7 +946,7 @@ function JobDetailModal({
           role="dialog"
           aria-modal="true"
           aria-label="职位详情"
-          className="pointer-events-auto relative w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-slate-900"
+          className="pointer-events-auto relative h-[calc(100vh-2rem)] max-h-[900px] w-full max-w-6xl overflow-hidden rounded-3xl bg-white shadow-2xl dark:bg-slate-900"
         >
           <button
             type="button"
@@ -990,7 +990,7 @@ function JobDetailModal({
           )}
 
           {!loading && !error && job && (
-            <div className="grid max-h-[90vh] min-h-[560px] lg:grid-cols-[320px,1fr]">
+            <div className="grid h-full min-h-0 lg:grid-cols-[320px,1fr]">
               <aside className="min-h-0 overflow-y-auto border-b border-slate-100 bg-slate-50/80 p-6 dark:border-slate-800 dark:bg-slate-950/40 lg:border-b-0 lg:border-r">
                 <div className="mb-4 flex flex-wrap items-center gap-2 pr-12">
                   <span
