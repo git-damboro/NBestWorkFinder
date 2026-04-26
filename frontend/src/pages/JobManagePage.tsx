@@ -1389,6 +1389,32 @@ function getResumeSignals(resumeDetail: ResumeDetail | null, experiences: UserEx
   return { technicalKeywords, abilityKeywords };
 }
 
+function buildTechnicalEvidence(keywords: string[], primaryExperience: string | null) {
+  if (keywords.length === 0) {
+    return primaryExperience
+      ? `我之前做过${shortenText(primaryExperience, 28)}相关项目`
+      : '我目前也在做岗位方向需要的项目和技术积累';
+  }
+
+  const backendKeywords = keywords.filter((keyword) => ['Java', 'SpringBoot', 'Python', '接口', '后端'].includes(keyword));
+  const aiKeywords = keywords.filter((keyword) => ['RAG', 'Agent', '向量检索', '知识库', 'SSE', '流式', 'AI应用', '工程化'].includes(keyword));
+  const otherKeywords = keywords.filter((keyword) => !backendKeywords.includes(keyword) && !aiKeywords.includes(keyword));
+
+  if (backendKeywords.length > 0 && aiKeywords.length > 0) {
+    return `我之前用${backendKeywords.join('、')}做过后端服务和接口实现，也做过${aiKeywords.join('、')}相关的AI应用功能`;
+  }
+
+  if (backendKeywords.length > 0) {
+    return `我之前用${backendKeywords.join('、')}做过后端服务、接口实现和业务功能落地`;
+  }
+
+  if (aiKeywords.length > 0) {
+    return `我之前做过${aiKeywords.join('、')}相关的AI应用功能，也会结合业务场景推进落地`;
+  }
+
+  return `我之前在项目里主要用到${otherKeywords.join('、')}，能结合需求完成具体功能开发`;
+}
+
 function buildBossOpenerDraft(
   job: JobDetail,
   resume: ResumeListItem | null,
@@ -1404,23 +1430,19 @@ function buildBossOpenerDraft(
   const primaryExperience = experiences[0] ? normalizeOpenerText(shortenText(experiences[0].content, 54)) : null;
   const secondaryExperience = experiences[1] ? normalizeOpenerText(shortenText(experiences[1].content, 36)) : null;
   const resumeClose = resume
-    ? '这边附上我的简历，辛苦您看一下，期待进一步交流。'
-    : '后续我也可以补充发送简历，期待进一步交流。';
+    ? '希望您查看一下我的简历，方便后续进一步交流。'
+    : '希望后续有机会进一步交流。';
 
   const firstParagraph = normalizeOpenerText(
-    `看到${normalizedTitle}岗位后想和您沟通一下，岗位需求的${directionText}这些技术栈与我的项目经历是匹配的。`,
+    `您好，我看到${normalizedTitle}岗位，岗位里提到的${directionText}正好覆盖了我最近项目里做的方向，所以想和您沟通一下。`,
   );
-  const technicalText = resumeSignals.technicalKeywords.length > 0
-    ? `我之前在项目里用过${resumeSignals.technicalKeywords.join('、')}等技术`
-    : primaryExperience
-      ? `我之前做过${shortenText(primaryExperience, 28)}相关项目`
-      : '我目前主要在做岗位方向需要的项目和技术积累';
+  const technicalText = buildTechnicalEvidence(resumeSignals.technicalKeywords, primaryExperience);
   const abilityText = resumeSignals.abilityKeywords.length > 0
-    ? `也熟悉${resumeSignals.abilityKeywords.join('、')}这类工程开发能力`
+    ? `平时也会参与${resumeSignals.abilityKeywords.join('、')}这些工作`
     : secondaryExperience
       ? `也做过${shortenText(secondaryExperience, 24)}相关内容`
-      : '也熟悉后端开发、接口实现和工程落地这类工作';
-  const experienceText = `${technicalText}，${abilityText}，整体能力和岗位要求匹配。`;
+      : '平时也会参与后端服务实现、前后端协作和业务功能落地';
+  const experienceText = `${technicalText}，${abilityText}。`;
   const secondParagraph = normalizeOpenerText(`${experienceText}${resumeClose}`);
 
   return normalizeOpenerText(`${firstParagraph}${secondParagraph}`);
