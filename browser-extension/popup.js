@@ -154,7 +154,11 @@ function extractCurrentPageJob() {
 
     return text
       .replace(/(职位描述[:：])\s*/g, '$1\n')
-      .replace(/(岗位职责[:：])\s*/g, '\n$1\n')
+      .replace(/\s*(岗位职责[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(任职要求[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(岗位要求[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(职位要求[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(任职资格[:：])\s*/g, '\n\n$1\n')
       .replace(/\s*([1-9][0-9]*[、.])\s*/g, '\n$1')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
