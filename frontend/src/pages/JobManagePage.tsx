@@ -1396,23 +1396,43 @@ function buildTechnicalEvidence(keywords: string[], primaryExperience: string | 
       : '我目前也在做岗位方向需要的项目和技术积累';
   }
 
-  const backendKeywords = keywords.filter((keyword) => ['Java', 'SpringBoot', 'Python', '接口', '后端'].includes(keyword));
-  const aiKeywords = keywords.filter((keyword) => ['RAG', 'Agent', '向量检索', '知识库', 'SSE', '流式', 'AI应用', '工程化'].includes(keyword));
+  const backendKeywords = keywords.filter((keyword) => ['Java', 'SpringBoot', 'Python', '接口', '后端'].includes(keyword)).slice(0, 2);
+  const aiKeywords = keywords.filter((keyword) => ['RAG', 'Agent', '向量检索', '知识库', 'SSE', '流式', 'AI应用', '工程化'].includes(keyword)).slice(0, 2);
   const otherKeywords = keywords.filter((keyword) => !backendKeywords.includes(keyword) && !aiKeywords.includes(keyword));
 
   if (backendKeywords.length > 0 && aiKeywords.length > 0) {
-    return `我之前用${backendKeywords.join('、')}做过后端服务和接口实现，也做过${aiKeywords.join('、')}相关的AI应用功能`;
+    return `我之前做过${backendKeywords.join('、')}相关的后端开发，也接触过${aiKeywords.join('、')}这类AI应用功能开发`;
   }
 
   if (backendKeywords.length > 0) {
-    return `我之前用${backendKeywords.join('、')}做过后端服务、接口实现和业务功能落地`;
+    return `我之前做过${backendKeywords.join('、')}相关的后端开发和业务功能落地`;
   }
 
   if (aiKeywords.length > 0) {
-    return `我之前做过${aiKeywords.join('、')}相关的AI应用功能，也会结合业务场景推进落地`;
+    return `我之前接触过${aiKeywords.join('、')}这类AI应用功能开发，也会结合业务场景推进落地`;
   }
 
   return `我之前在项目里主要用到${otherKeywords.join('、')}，能结合需求完成具体功能开发`;
+}
+
+function buildAbilityEvidence(keywords: string[], secondaryExperience: string | null) {
+  if (keywords.length > 0) {
+    const normalizedKeywords = keywords.map((keyword) => {
+      if (keyword === '接口开发') {
+        return '接口实现';
+      }
+      if (keyword === '项目落地' || keyword === '工程落地') {
+        return '业务功能落地';
+      }
+      return keyword;
+    });
+
+    return `平时会参与${uniqueLimited(normalizedKeywords, 3).join('、')}这些工作`;
+  }
+
+  return secondaryExperience
+    ? `也做过${shortenText(secondaryExperience, 24)}相关内容`
+    : '平时会参与接口实现、前后端协作和业务功能落地';
 }
 
 function buildBossOpenerDraft(
@@ -1422,10 +1442,6 @@ function buildBossOpenerDraft(
   experiences: UserExperience[],
 ) {
   const normalizedTitle = normalizeOpenerText(job.title);
-  const jobTags = job.techTags.slice(0, 3).map(normalizeOpenerText).filter(Boolean);
-  const directionText = jobTags.length > 0
-    ? jobTags.join('、')
-    : normalizeOpenerText(shortenText(job.description, 32));
   const resumeSignals = getResumeSignals(resumeDetail, experiences);
   const primaryExperience = experiences[0] ? normalizeOpenerText(shortenText(experiences[0].content, 54)) : null;
   const secondaryExperience = experiences[1] ? normalizeOpenerText(shortenText(experiences[1].content, 36)) : null;
@@ -1434,14 +1450,10 @@ function buildBossOpenerDraft(
     : '希望后续有机会进一步交流。';
 
   const firstParagraph = normalizeOpenerText(
-    `您好，我看到${normalizedTitle}岗位，岗位里提到的${directionText}正好覆盖了我最近项目里做的方向，所以想和您沟通一下。`,
+    `您好，我看到${normalizedTitle}这个岗位后，感觉和我最近在做的方向比较接近，所以想和您沟通一下。`,
   );
   const technicalText = buildTechnicalEvidence(resumeSignals.technicalKeywords, primaryExperience);
-  const abilityText = resumeSignals.abilityKeywords.length > 0
-    ? `平时也会参与${resumeSignals.abilityKeywords.join('、')}这些工作`
-    : secondaryExperience
-      ? `也做过${shortenText(secondaryExperience, 24)}相关内容`
-      : '平时也会参与后端服务实现、前后端协作和业务功能落地';
+  const abilityText = buildAbilityEvidence(resumeSignals.abilityKeywords, secondaryExperience);
   const experienceText = `${technicalText}，${abilityText}。`;
   const secondParagraph = normalizeOpenerText(`${experienceText}${resumeClose}`);
 
