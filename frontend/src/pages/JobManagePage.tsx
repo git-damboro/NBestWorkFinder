@@ -1150,6 +1150,14 @@ function JobDetailModal({
                   />
                 </div>
 
+                <FollowUpTimeline
+                  job={job}
+                  followUps={followUps}
+                  loadingFollowUps={loadingFollowUps}
+                  followUpError={followUpError}
+                  onRetryFollowUps={onRetryFollowUps}
+                />
+
                 <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
                   <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
                     职位描述
@@ -1188,84 +1196,6 @@ function JobDetailModal({
                   <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
                     {job.notes || '暂无备注，可用于记录投递渠道、面试进度和 follow-up 计划。'}
                   </p>
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                        投递跟进时间线
-                      </h3>
-                      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                        自动记录状态变化，也会展示手动沟通记录。
-                      </p>
-                    </div>
-                    {job.appliedAt && (
-                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
-                        投递于 {formatDateTime(job.appliedAt)}
-                      </span>
-                    )}
-                  </div>
-
-                  {loadingFollowUps && (
-                    <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      正在加载跟进记录...
-                    </div>
-                  )}
-
-                  {!loadingFollowUps && followUpError && (
-                    <button
-                      type="button"
-                      onClick={onRetryFollowUps}
-                      className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/60 dark:bg-red-900/20 dark:text-red-200"
-                    >
-                      {followUpError}，点击重试
-                    </button>
-                  )}
-
-                  {!loadingFollowUps && !followUpError && followUps.length === 0 && (
-                    <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-400 dark:bg-slate-800 dark:text-slate-500">
-                      还没有跟进记录，标记投递或添加备注后会出现在这里。
-                    </p>
-                  )}
-
-                  {!loadingFollowUps && !followUpError && followUps.length > 0 && (
-                    <div className="space-y-3">
-                      {followUps.map((record) => (
-                        <div key={record.id} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-500 dark:bg-slate-900 dark:text-slate-300">
-                                {jobFollowUpTypeLabelMap[record.type]}
-                              </span>
-                              {record.contactMethod && (
-                                <span className="text-xs text-slate-400 dark:text-slate-500">
-                                  {record.contactMethod}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-xs text-slate-400 dark:text-slate-500">
-                              {formatDateTime(record.createdAt)}
-                            </span>
-                          </div>
-                          <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-100">
-                            {record.title}
-                          </p>
-                          {record.content && (
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-300">
-                              {record.content}
-                            </p>
-                          )}
-                          {record.nextFollowUpAt && (
-                            <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-300">
-                              下次跟进：{formatDateTime(record.nextFollowUpAt)}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </section>
             </div>
@@ -1319,6 +1249,102 @@ function DetailCard({ icon: Icon, label, value }: DetailCardProps) {
         <span>{label}</span>
       </div>
       <p className="mt-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+interface FollowUpTimelineProps {
+  job: JobDetail;
+  followUps: JobFollowUpRecord[];
+  loadingFollowUps: boolean;
+  followUpError: string | null;
+  onRetryFollowUps: () => void;
+}
+
+function FollowUpTimeline({
+  job,
+  followUps,
+  loadingFollowUps,
+  followUpError,
+  onRetryFollowUps,
+}: FollowUpTimelineProps) {
+  return (
+    <div className="mt-6 rounded-2xl border border-primary-100 bg-primary-50/40 p-5 dark:border-primary-800/60 dark:bg-primary-900/10">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            投递跟进时间线
+          </h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            状态变化会自动记录，也可以手动添加沟通、面试和备注。
+          </p>
+        </div>
+        {job.appliedAt && (
+          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+            投递于 {formatDateTime(job.appliedAt)}
+          </span>
+        )}
+      </div>
+
+      {loadingFollowUps && (
+        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          正在加载跟进记录...
+        </div>
+      )}
+
+      {!loadingFollowUps && followUpError && (
+        <button
+          type="button"
+          onClick={onRetryFollowUps}
+          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/60 dark:bg-red-900/20 dark:text-red-200"
+        >
+          {followUpError}，点击重试
+        </button>
+      )}
+
+      {!loadingFollowUps && !followUpError && followUps.length === 0 && (
+        <p className="rounded-xl bg-white px-3 py-4 text-sm text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-400">
+          还没有跟进记录。点击左侧“标记已投递”或“添加跟进”后，记录会显示在这里。
+        </p>
+      )}
+
+      {!loadingFollowUps && !followUpError && followUps.length > 0 && (
+        <div className="space-y-3">
+          {followUps.map((record) => (
+            <div key={record.id} className="rounded-xl bg-white p-3 shadow-sm dark:bg-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-200">
+                    {jobFollowUpTypeLabelMap[record.type]}
+                  </span>
+                  {record.contactMethod && (
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      {record.contactMethod}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  {formatDateTime(record.createdAt)}
+                </span>
+              </div>
+              <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-100">
+                {record.title}
+              </p>
+              {record.content && (
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-300">
+                  {record.content}
+                </p>
+              )}
+              {record.nextFollowUpAt && (
+                <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-300">
+                  下次跟进：{formatDateTime(record.nextFollowUpAt)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
