@@ -24,8 +24,9 @@ import { getErrorMessage } from '../api/request';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 import JobFormDialog, { type JobFormData, type JobFormMode } from '../components/JobFormDialog';
+import JobFollowUpDialog from '../components/JobFollowUpDialog';
 import JobMatchDialog from '../components/JobMatchDialog';
-import type { JobFollowUpRecord } from '../types/job-follow-up';
+import type { CreateJobFollowUpForm, JobFollowUpRecord } from '../types/job-follow-up';
 import { jobFollowUpTypeLabelMap } from '../types/job-follow-up';
 import type { InterviewJobTarget } from '../types/interview';
 import type { CreateJobForm, JobApplicationStatus, JobDetail, JobListItem, UpdateJobForm } from '../types/job';
@@ -166,6 +167,8 @@ export default function JobManagePage() {
   const [followUps, setFollowUps] = useState<JobFollowUpRecord[]>([]);
   const [loadingFollowUps, setLoadingFollowUps] = useState(false);
   const [followUpError, setFollowUpError] = useState<string | null>(null);
+  const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
 
   // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
   const selectedJobIdRef = useRef<number | null>(null);
@@ -449,6 +452,44 @@ export default function JobManagePage() {
     });
   };
 
+  const handleCreateFollowUp = async (data: CreateJobFollowUpForm) => {
+    if (!selectedJob) {
+      return;
+    }
+
+    setSavingFollowUp(true);
+    setActionError(null);
+
+    try {
+      await jobFollowUpApi.create(selectedJob.id, data);
+      setFollowUpDialogOpen(false);
+      await loadJobDetail(selectedJob.id);
+      await loadFollowUps(selectedJob.id);
+      await loadJobs(selectedJob.id);
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSavingFollowUp(false);
+    }
+  };
+
+  const updateSelectedJobStatus = async (status: JobApplicationStatus) => {
+    if (!selectedJob || selectedJob.applicationStatus === status) {
+      return;
+    }
+
+    setActionError(null);
+
+    try {
+      await jobApi.updateJob(selectedJob.id, { applicationStatus: status });
+      await loadJobDetail(selectedJob.id);
+      await loadFollowUps(selectedJob.id);
+      await loadJobs(selectedJob.id);
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -695,6 +736,8 @@ export default function JobManagePage() {
             void loadFollowUps(selectedJobId);
           }
         }}
+        onAddFollowUp={() => setFollowUpDialogOpen(true)}
+        onChangeStatus={(status) => void updateSelectedJobStatus(status)}
         onEdit={() => {
           setDetailModalOpen(false);
           openEditDialog();
@@ -736,6 +779,13 @@ export default function JobManagePage() {
             : null
         }
         onClose={() => setMatchOpen(false)}
+      />
+
+      <JobFollowUpDialog
+        open={followUpDialogOpen}
+        loading={savingFollowUp}
+        onCancel={() => setFollowUpDialogOpen(false)}
+        onSubmit={(data) => void handleCreateFollowUp(data)}
       />
 
       <ConfirmDialog
@@ -849,6 +899,8 @@ interface JobDetailModalProps {
   onClose: () => void;
   onRetry: () => void;
   onRetryFollowUps: () => void;
+  onAddFollowUp: () => void;
+  onChangeStatus: (status: JobApplicationStatus) => void;
   onEdit: () => void;
   onMatch: () => void;
   onInterview: () => void;
@@ -866,6 +918,8 @@ function JobDetailModal({
   onClose,
   onRetry,
   onRetryFollowUps,
+  onAddFollowUp,
+  onChangeStatus,
   onEdit,
   onMatch,
   onInterview,
@@ -996,6 +1050,31 @@ function JobDetailModal({
                 <div className="mt-8 grid gap-3">
                   <button
                     type="button"
+                    onClick={onAddFollowUp}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-4 py-2.5 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100 dark:border-primary-700/60 dark:bg-primary-900/20 dark:text-primary-200"
+                  >
+                    添加跟进
+                  </button>
+                  {job.applicationStatus !== 'APPLIED' && (
+                    <button
+                      type="button"
+                      onClick={() => onChangeStatus('APPLIED')}
+                      className="rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-600"
+                    >
+                      标记已投递
+                    </button>
+                  )}
+                  {job.applicationStatus !== 'INTERVIEWING' && (
+                    <button
+                      type="button"
+                      onClick={() => onChangeStatus('INTERVIEWING')}
+                      className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-amber-600"
+                    >
+                      进入面试中
+                    </button>
+                  )}
+                  <button
+                    type="button"
                     onClick={onMatch}
                     className="flex items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-600"
                   >
@@ -1010,6 +1089,26 @@ function JobDetailModal({
                     <Sparkles className="h-4 w-4" />
                     定向面试
                   </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    {job.applicationStatus !== 'OFFERED' && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeStatus('OFFERED')}
+                        className="rounded-xl bg-emerald-500 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600"
+                      >
+                        标记 Offer
+                      </button>
+                    )}
+                    {job.applicationStatus !== 'REJECTED' && (
+                      <button
+                        type="button"
+                        onClick={() => onChangeStatus('REJECTED')}
+                        className="rounded-xl bg-rose-500 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-rose-600"
+                      >
+                        标记拒绝
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={onEdit}
