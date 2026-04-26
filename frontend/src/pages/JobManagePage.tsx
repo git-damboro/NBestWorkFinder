@@ -1335,21 +1335,58 @@ function normalizeOpenerText(value: string) {
     .trim();
 }
 
-function getResumeSignal(resumeDetail: ResumeDetail | null) {
-  if (!resumeDetail) {
-    return null;
-  }
+function collectMatchedKeywords(sources: string[], keywords: string[]) {
+  const sourceText = sources.join(' ').toLowerCase();
+  return keywords.filter((keyword) => sourceText.includes(keyword.toLowerCase()));
+}
 
-  const latestAnalysis = resumeDetail.analyses?.[0];
-  const candidates = [
-    latestAnalysis?.summary,
+function uniqueLimited(values: string[], limit: number) {
+  return Array.from(new Set(values.filter(Boolean))).slice(0, limit);
+}
+
+function getResumeSignals(resumeDetail: ResumeDetail | null, experiences: UserExperience[]) {
+  const latestAnalysis = resumeDetail?.analyses?.[0];
+  const sources = [
+    resumeDetail?.resumeText ?? '',
+    latestAnalysis?.summary ?? '',
     ...(latestAnalysis?.strengths ?? []),
-    resumeDetail.resumeText,
-  ];
+    ...experiences.map((item) => `${item.title} ${item.content} ${item.tags.join(' ')}`),
+  ].map(normalizeOpenerText);
 
-  return candidates
-    .map((value) => normalizeOpenerText(value ?? ''))
-    .find(Boolean) ?? null;
+  const technicalKeywords = uniqueLimited(collectMatchedKeywords(sources, [
+    'Java',
+    'SpringBoot',
+    'Spring Boot',
+    'Python',
+    'RAG',
+    'Agent',
+    '向量检索',
+    '知识库',
+    'SSE',
+    '流式',
+    '接口',
+    '后端',
+    '前端',
+    '全栈',
+    'PostgreSQL',
+    'Redis',
+    'AI应用',
+    '工程化',
+  ]).map((keyword) => keyword.replace('Spring Boot', 'SpringBoot')), 4);
+
+  const abilityKeywords = uniqueLimited(collectMatchedKeywords(sources, [
+    '项目落地',
+    '系统开发',
+    '接口开发',
+    '前后端协作',
+    '任务流转',
+    '数据持久化',
+    '业务闭环',
+    '问题拆解',
+    '工程落地',
+  ]), 3);
+
+  return { technicalKeywords, abilityKeywords };
 }
 
 function buildBossOpenerDraft(
@@ -1363,7 +1400,7 @@ function buildBossOpenerDraft(
   const directionText = jobTags.length > 0
     ? jobTags.join('、')
     : normalizeOpenerText(shortenText(job.description, 32));
-  const resumeSignal = getResumeSignal(resumeDetail);
+  const resumeSignals = getResumeSignals(resumeDetail, experiences);
   const primaryExperience = experiences[0] ? normalizeOpenerText(shortenText(experiences[0].content, 54)) : null;
   const secondaryExperience = experiences[1] ? normalizeOpenerText(shortenText(experiences[1].content, 36)) : null;
   const resumeClose = resume
@@ -1373,11 +1410,17 @@ function buildBossOpenerDraft(
   const firstParagraph = normalizeOpenerText(
     `看到${normalizedTitle}岗位后想和您沟通一下，岗位里${directionText}这些方向和我目前关注的求职方向比较接近。`,
   );
-  const experienceText = resumeSignal
-    ? `从我的简历来看，我主要有${shortenText(resumeSignal, 64)}相关积累${primaryExperience ? `，也补充做过${primaryExperience}` : ''}，这些经历和岗位里需要的工程落地、协作开发或问题拆解能力有一定关联。`
+  const technicalText = resumeSignals.technicalKeywords.length > 0
+    ? `我之前的项目里接触过${resumeSignals.technicalKeywords.join('、')}等内容`
     : primaryExperience
-    ? `我之前主要做过${primaryExperience}${secondaryExperience ? `，也有${secondaryExperience}相关经历` : ''}，这些经历和岗位里需要的工程落地、协作开发或问题拆解能力有一定关联。`
-    : '我目前主要在补充相关项目和技术能力，也希望结合岗位要求继续深入学习和实践。';
+      ? `我之前做过和${shortenText(primaryExperience, 28)}相关的项目`
+      : '我目前主要在补充相关项目和技术能力';
+  const abilityText = resumeSignals.abilityKeywords.length > 0
+    ? `也比较重视${resumeSignals.abilityKeywords.join('、')}这类工程能力`
+    : secondaryExperience
+      ? `也有${shortenText(secondaryExperience, 24)}相关经历`
+      : '也希望结合岗位要求继续提升工程落地能力';
+  const experienceText = `${technicalText}，${abilityText}，整体方向和岗位要求比较匹配。`;
   const secondParagraph = normalizeOpenerText(`${experienceText}${resumeClose}`);
 
   return `  ${firstParagraph}\n  ${secondParagraph}`;
