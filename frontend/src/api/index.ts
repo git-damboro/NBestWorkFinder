@@ -8,4 +8,5 @@ export { knowledgeBaseApi } from './knowledgebase';
 export { historyApi } from './history';
 export { jobApi } from './jobs';
 export { jobDraftApi } from './jobDrafts';
+export { jobFollowUpApi } from './jobFollowUps';
 export { aiGenerationTaskApi } from './aiGenerationTasks';

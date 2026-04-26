@@ -15,6 +15,9 @@ export interface JobListItem {
   techTags: string[];
   applicationStatus: JobApplicationStatus;
   createdAt: string;
+  appliedAt: string | null;
+  lastFollowUpAt: string | null;
+  nextFollowUpAt: string | null;
 }
 
 export interface JobDetail {
@@ -30,6 +33,9 @@ export interface JobDetail {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  appliedAt: string | null;
+  lastFollowUpAt: string | null;
+  nextFollowUpAt: string | null;
 }
 
 export interface JobMatchResult {

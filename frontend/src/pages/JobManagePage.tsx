@@ -18,13 +18,15 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { jobApi } from '../api';
+import { jobApi, jobFollowUpApi } from '../api';
 import { historyApi, type ResumeListItem } from '../api/history';
 import { getErrorMessage } from '../api/request';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 import JobFormDialog, { type JobFormData, type JobFormMode } from '../components/JobFormDialog';
 import JobMatchDialog from '../components/JobMatchDialog';
+import type { JobFollowUpRecord } from '../types/job-follow-up';
+import { jobFollowUpTypeLabelMap } from '../types/job-follow-up';
 import type { InterviewJobTarget } from '../types/interview';
 import type { CreateJobForm, JobApplicationStatus, JobDetail, JobListItem, UpdateJobForm } from '../types/job';
 import { jobStatusLabelMap, jobStatusOptions } from '../types/job';
@@ -161,6 +163,9 @@ export default function JobManagePage() {
   const [loadingInterviewResumes, setLoadingInterviewResumes] = useState(false);
   const [selectedInterviewResumeId, setSelectedInterviewResumeId] = useState<number | null>(null);
   const [interviewError, setInterviewError] = useState<string | null>(null);
+  const [followUps, setFollowUps] = useState<JobFollowUpRecord[]>([]);
+  const [loadingFollowUps, setLoadingFollowUps] = useState(false);
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
 
   // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
   const selectedJobIdRef = useRef<number | null>(null);
@@ -183,6 +188,21 @@ export default function JobManagePage() {
     navigate(location.pathname, { replace: true, state: null });
   }, [routeSelectedJobId, navigate, location.pathname]);
 
+  const loadFollowUps = useCallback(async (jobId: number) => {
+    setLoadingFollowUps(true);
+    setFollowUpError(null);
+
+    try {
+      const data = await jobFollowUpApi.list(jobId);
+      setFollowUps(data);
+    } catch (error) {
+      setFollowUps([]);
+      setFollowUpError(getErrorMessage(error));
+    } finally {
+      setLoadingFollowUps(false);
+    }
+  }, []);
+
   const loadJobDetail = useCallback(async (jobId: number) => {
     const requestId = ++detailRequestIdRef.current;
     setLoadingDetail(true);
@@ -194,18 +214,20 @@ export default function JobManagePage() {
         return;
       }
       setSelectedJob(data);
+      void loadFollowUps(jobId);
     } catch (error) {
       if (detailRequestIdRef.current !== requestId) {
         return;
       }
       setSelectedJob(null);
+      setFollowUps([]);
       setDetailError(getErrorMessage(error));
     } finally {
       if (detailRequestIdRef.current === requestId) {
         setLoadingDetail(false);
       }
     }
-  }, []);
+  }, [loadFollowUps]);
 
   const loadJobs = useCallback(
     async (preferredId?: number | null) => {
@@ -219,6 +241,7 @@ export default function JobManagePage() {
         if (data.length === 0) {
           setSelectedJobId(null);
           setSelectedJob(null);
+          setFollowUps([]);
           setDetailError(null);
           return;
         }
@@ -233,6 +256,7 @@ export default function JobManagePage() {
         setJobs([]);
         setSelectedJobId(null);
         setSelectedJob(null);
+        setFollowUps([]);
       } finally {
         setLoadingList(false);
       }
@@ -247,6 +271,7 @@ export default function JobManagePage() {
   useEffect(() => {
     if (selectedJobId === null) {
       setSelectedJob(null);
+      setFollowUps([]);
       setDetailError(null);
       return;
     }
@@ -656,10 +681,18 @@ export default function JobManagePage() {
         job={selectedJob}
         loading={loadingDetail}
         error={detailError}
+        followUps={followUps}
+        loadingFollowUps={loadingFollowUps}
+        followUpError={followUpError}
         onClose={() => setDetailModalOpen(false)}
         onRetry={() => {
           if (selectedJobId !== null) {
             void loadJobDetail(selectedJobId);
+          }
+        }}
+        onRetryFollowUps={() => {
+          if (selectedJobId !== null) {
+            void loadFollowUps(selectedJobId);
           }
         }}
         onEdit={() => {
@@ -810,8 +843,12 @@ interface JobDetailModalProps {
   job: JobDetail | null;
   loading: boolean;
   error: string | null;
+  followUps: JobFollowUpRecord[];
+  loadingFollowUps: boolean;
+  followUpError: string | null;
   onClose: () => void;
   onRetry: () => void;
+  onRetryFollowUps: () => void;
   onEdit: () => void;
   onMatch: () => void;
   onInterview: () => void;
@@ -823,8 +860,12 @@ function JobDetailModal({
   job,
   loading,
   error,
+  followUps,
+  loadingFollowUps,
+  followUpError,
   onClose,
   onRetry,
+  onRetryFollowUps,
   onEdit,
   onMatch,
   onInterview,
@@ -1005,8 +1046,8 @@ function JobDetailModal({
                   />
                   <DetailCard
                     icon={CalendarDays}
-                    label="最近更新"
-                    value={formatDateTime(job.updatedAt)}
+                    label="下一步跟进"
+                    value={job.nextFollowUpAt ? formatDateTime(job.nextFollowUpAt) : '未设置'}
                   />
                 </div>
 
@@ -1048,6 +1089,84 @@ function JobDetailModal({
                   <p className="whitespace-pre-wrap text-sm leading-7 text-slate-600 dark:text-slate-300">
                     {job.notes || '暂无备注，可用于记录投递渠道、面试进度和 follow-up 计划。'}
                   </p>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                        投递跟进时间线
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                        自动记录状态变化，也会展示手动沟通记录。
+                      </p>
+                    </div>
+                    {job.appliedAt && (
+                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-200">
+                        投递于 {formatDateTime(job.appliedAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingFollowUps && (
+                    <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      正在加载跟进记录...
+                    </div>
+                  )}
+
+                  {!loadingFollowUps && followUpError && (
+                    <button
+                      type="button"
+                      onClick={onRetryFollowUps}
+                      className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/60 dark:bg-red-900/20 dark:text-red-200"
+                    >
+                      {followUpError}，点击重试
+                    </button>
+                  )}
+
+                  {!loadingFollowUps && !followUpError && followUps.length === 0 && (
+                    <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                      还没有跟进记录，标记投递或添加备注后会出现在这里。
+                    </p>
+                  )}
+
+                  {!loadingFollowUps && !followUpError && followUps.length > 0 && (
+                    <div className="space-y-3">
+                      {followUps.map((record) => (
+                        <div key={record.id} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-500 dark:bg-slate-900 dark:text-slate-300">
+                                {jobFollowUpTypeLabelMap[record.type]}
+                              </span>
+                              {record.contactMethod && (
+                                <span className="text-xs text-slate-400 dark:text-slate-500">
+                                  {record.contactMethod}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
+                              {formatDateTime(record.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-100">
+                            {record.title}
+                          </p>
+                          {record.content && (
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-300">
+                              {record.content}
+                            </p>
+                          )}
+                          {record.nextFollowUpAt && (
+                            <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-300">
+                              下次跟进：{formatDateTime(record.nextFollowUpAt)}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </section>
             </div>
