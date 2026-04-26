@@ -66,6 +66,7 @@
 | `2026-04-25` | `$env:JAVA_HOME='G:\\jdk'; .\\gradlew.bat :app:test --tests "com.nbwf.modules.jobdraft.service.JobDraftServiceLatestBatchTest"` | 通过，验证职位草稿最近批次恢复无数据/多数据场景 |
 | `2026-04-25` | `$env:JAVA_HOME='G:\\jdk'; .\\gradlew.bat :app:compileJava` | 通过，验证职位草稿最近批次查询改动可编译 |
 | `2026-04-25` | `frontend -> npm.cmd run build`（BUG-011、BUG-012、BUG-013 三次前端小修复后） | 三次均通过，仍存在既有 CSS minify warning 与大 chunk warning |
+| `2026-04-26` | `frontend -> npm.cmd run build`（品牌名称与 Logo 轻改后） | 通过，仍存在既有 CSS minify warning 与大 chunk warning |
 
 ## 6. 当前优先级
 
@@ -73,7 +74,7 @@
 |---:|---|---|---|
 | P0 | `jobdraft` | 回归 `BUG-010` | `BUG-008`、`BUG-009` 已手测通过；剩余职位草稿编辑/空态待确认 |
 | P1 | `knowledgebase / rag-chat` | 回归 `BUG-011` | `BUG-012`、`BUG-013` 已手测通过；剩余知识库问答发送链路待确认 |
-| P1 | `UX` | 手测职位详情弹窗并决定下一项 UX | `UX-002` 已完成第一版；下一项优先考虑岗位 JD 大输入框识别 |
+| P1 | `backend` | 优先处理后端功能稳定性 | 前端大改暂停，仅保留品牌轻改；后续重心回到后端功能 |
 | P1 | `tests` | 补更多跨用户隔离与恢复回归测试 | 强化权限与链路稳定性 |
 | P2 | `frontend` | 分析大包与 chunk warning | 当前不阻塞交付，后续单独做性能优化 |
 
@@ -82,7 +83,7 @@
 | 项目 | 内容 |
 |---|---|
 | 目标 | 完成两批手测问题回归 |
-| 具体任务 | 页面回归剩余 2 项：`BUG-010` 职位草稿编辑/空态、`BUG-011` 知识库问答发送链路 |
+| 具体任务 | 前端只完成品牌名称/Logo 轻改；随后继续处理 `BUG-010` 职位草稿编辑/空态、`BUG-011` 知识库问答发送链路 |
 | 完成标准 | 每个问题均手测通过，若有新问题继续拆成小任务单独提交/推送 |
 
 ## 8. 已识别风险与注意点
@@ -112,6 +113,7 @@
 | `3b697cd` | fix | 已有回答内容时忽略流关闭阶段的 network error |
 | `90c5431` | fix | 重向量化入口改为明确文字按钮并补反馈 |
 | `c4a09b3` | fix | 问答助手新增/切换/改名补交互状态 |
+| `本次提交` | style | 前端品牌名称与 Logo 轻改 |
 
 ## 10. 文档维护规则
 

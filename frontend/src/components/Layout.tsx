@@ -10,7 +10,6 @@ import {
   LogOut,
   MessageSquare,
   Moon,
-  Sparkles,
   Sun,
   Upload,
   Users,
@@ -98,13 +97,13 @@ export default function Layout() {
         <div className="flex items-center justify-between border-b border-slate-100 p-6 dark:border-slate-700">
           <Link to="/upload" className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/30">
-              <Sparkles className="h-5 w-5" />
+              <Briefcase className="h-5 w-5" />
             </div>
             <div>
               <span className="block text-lg font-bold tracking-tight text-slate-800 dark:text-white">
-                AI Interview
+                NBestWorkFinder
               </span>
-              <span className="text-xs text-slate-400 dark:text-slate-500">智能面试助手</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">AI 求职工作台</span>
             </div>
           </Link>
         </div>
@@ -181,8 +180,8 @@ export default function Layout() {
 
         <div className="space-y-3 border-t border-slate-100 p-4 dark:border-slate-700">
           <div className="rounded-xl bg-gradient-to-r from-primary-50 to-indigo-50 px-3 py-2 dark:from-primary-900/30 dark:to-slate-800">
-            <p className="text-xs font-medium text-primary-600 dark:text-primary-400">AI 面试助手 v1.0</p>
-            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">Powered by AI</p>
+            <p className="text-xs font-medium text-primary-600 dark:text-primary-400">NBestWorkFinder v1.0</p>
+            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">AI 求职工作台</p>
           </div>
 
           {user && (

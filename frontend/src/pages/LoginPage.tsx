@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Lock, Mail, Sparkles } from 'lucide-react';
+import { Briefcase, Lock, Mail } from 'lucide-react';
 import { getErrorMessage } from '../api/request';
 import { useAuth } from '../auth/AuthContext';
 
@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-14 h-14 mx-auto mb-4 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary-500/30">
-            <Sparkles className="w-7 h-7" />
+            <Briefcase className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">登录 NBestWorkFinder</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
