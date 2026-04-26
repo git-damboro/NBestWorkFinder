@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { jobApi, jobFollowUpApi, userExperienceApi } from '../api';
-import { historyApi, type ResumeListItem } from '../api/history';
+import { historyApi, type ResumeDetail, type ResumeListItem } from '../api/history';
 import { getErrorMessage } from '../api/request';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
@@ -1335,12 +1335,35 @@ function normalizeOpenerText(value: string) {
     .trim();
 }
 
-function buildBossOpenerDraft(job: JobDetail, resume: ResumeListItem | null, experiences: UserExperience[]) {
+function getResumeSignal(resumeDetail: ResumeDetail | null) {
+  if (!resumeDetail) {
+    return null;
+  }
+
+  const latestAnalysis = resumeDetail.analyses?.[0];
+  const candidates = [
+    latestAnalysis?.summary,
+    ...(latestAnalysis?.strengths ?? []),
+    resumeDetail.resumeText,
+  ];
+
+  return candidates
+    .map((value) => normalizeOpenerText(value ?? ''))
+    .find(Boolean) ?? null;
+}
+
+function buildBossOpenerDraft(
+  job: JobDetail,
+  resume: ResumeListItem | null,
+  resumeDetail: ResumeDetail | null,
+  experiences: UserExperience[],
+) {
   const normalizedTitle = normalizeOpenerText(job.title);
   const jobTags = job.techTags.slice(0, 3).map(normalizeOpenerText).filter(Boolean);
   const directionText = jobTags.length > 0
     ? jobTags.join('、')
     : normalizeOpenerText(shortenText(job.description, 32));
+  const resumeSignal = getResumeSignal(resumeDetail);
   const primaryExperience = experiences[0] ? normalizeOpenerText(shortenText(experiences[0].content, 54)) : null;
   const secondaryExperience = experiences[1] ? normalizeOpenerText(shortenText(experiences[1].content, 36)) : null;
   const resumeClose = resume
@@ -1350,7 +1373,9 @@ function buildBossOpenerDraft(job: JobDetail, resume: ResumeListItem | null, exp
   const firstParagraph = normalizeOpenerText(
     `看到${normalizedTitle}岗位后想和您沟通一下，岗位里${directionText}这些方向和我目前关注的求职方向比较接近。`,
   );
-  const experienceText = primaryExperience
+  const experienceText = resumeSignal
+    ? `从我的简历来看，我主要有${shortenText(resumeSignal, 64)}相关积累${primaryExperience ? `，也补充做过${primaryExperience}` : ''}，这些经历和岗位里需要的工程落地、协作开发或问题拆解能力有一定关联。`
+    : primaryExperience
     ? `我之前主要做过${primaryExperience}${secondaryExperience ? `，也有${secondaryExperience}相关经历` : ''}，这些经历和岗位里需要的工程落地、协作开发或问题拆解能力有一定关联。`
     : '我目前主要在补充相关项目和技术能力，也希望结合岗位要求继续深入学习和实践。';
   const secondParagraph = normalizeOpenerText(`${experienceText}${resumeClose}`);
@@ -1376,6 +1401,9 @@ function DeliveryPrepDialog({
 }: DeliveryPrepDialogProps) {
   const sortedResumes = useMemo(() => sortResumesByLatest(resumes), [resumes]);
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
+  const [selectedResumeDetail, setSelectedResumeDetail] = useState<ResumeDetail | null>(null);
+  const [loadingResumeDetail, setLoadingResumeDetail] = useState(false);
+  const [resumeDetailError, setResumeDetailError] = useState<string | null>(null);
   const [openerDraft, setOpenerDraft] = useState('');
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -1387,6 +1415,40 @@ function DeliveryPrepDialog({
     setSelectedResumeId(sortedResumes[0]?.id ?? null);
   }, [open, sortedResumes]);
 
+  useEffect(() => {
+    if (!open || selectedResumeId === null) {
+      setSelectedResumeDetail(null);
+      setResumeDetailError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingResumeDetail(true);
+    setResumeDetailError(null);
+
+    historyApi.getResumeDetail(selectedResumeId)
+      .then((detail) => {
+        if (!cancelled) {
+          setSelectedResumeDetail(detail);
+        }
+      })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setSelectedResumeDetail(null);
+          setResumeDetailError(getErrorMessage(loadError));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingResumeDetail(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, selectedResumeId]);
+
   const selectedResume = useMemo(
     () => sortedResumes.find((resume) => resume.id === selectedResumeId) ?? null,
     [sortedResumes, selectedResumeId],
@@ -1396,17 +1458,17 @@ function DeliveryPrepDialog({
     if (!job) {
       return;
     }
-    setOpenerDraft(buildBossOpenerDraft(job, selectedResume, experiences));
+    setOpenerDraft(buildBossOpenerDraft(job, selectedResume, selectedResumeDetail, experiences));
     setCopied(false);
     setCopyError(null);
-  }, [job, selectedResume, experiences]);
+  }, [job, selectedResume, selectedResumeDetail, experiences]);
 
   useEffect(() => {
     if (!open || !job) {
       return;
     }
     generateOpenerDraft();
-  }, [open, job, generateOpenerDraft]);
+  }, [open, job, selectedResumeDetail, generateOpenerDraft]);
 
   if (!open || !job) {
     return null;
@@ -1550,17 +1612,35 @@ function DeliveryPrepDialog({
                   )}
 
                   {!loadingResumes && !resumeError && sortedResumes.length > 0 && (
-                    <select
-                      value={selectedResumeId ?? ''}
-                      onChange={(event) => setSelectedResumeId(Number(event.target.value))}
-                      className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-primary-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    >
-                      {sortedResumes.map((resume, index) => (
-                        <option key={resume.id} value={resume.id}>
-                          {index === 0 ? '最新 · ' : ''}{resume.filename} · 上传于 {formatDateOnly(resume.uploadedAt)}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        value={selectedResumeId ?? ''}
+                        onChange={(event) => setSelectedResumeId(Number(event.target.value))}
+                        className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-primary-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      >
+                        {sortedResumes.map((resume, index) => (
+                          <option key={resume.id} value={resume.id}>
+                            {index === 0 ? '最新 · ' : ''}{resume.filename} · 上传于 {formatDateOnly(resume.uploadedAt)}
+                          </option>
+                        ))}
+                      </select>
+                      {loadingResumeDetail && (
+                        <p className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          正在读取选中简历内容...
+                        </p>
+                      )}
+                      {!loadingResumeDetail && resumeDetailError && (
+                        <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                          简历详情读取失败，当前会用职位和我的经历生成：{resumeDetailError}
+                        </p>
+                      )}
+                      {!loadingResumeDetail && !resumeDetailError && selectedResumeDetail && (
+                        <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-300">
+                          已读取选中简历内容，开场白会结合简历摘要和正文片段生成。
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
 
