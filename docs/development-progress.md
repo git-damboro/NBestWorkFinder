@@ -67,12 +67,15 @@
 | `2026-04-25` | `$env:JAVA_HOME='G:\\jdk'; .\\gradlew.bat :app:compileJava` | 通过，验证职位草稿最近批次查询改动可编译 |
 | `2026-04-25` | `frontend -> npm.cmd run build`（BUG-011、BUG-012、BUG-013 三次前端小修复后） | 三次均通过，仍存在既有 CSS minify warning 与大 chunk warning |
 | `2026-04-26` | `frontend -> npm.cmd run build`（品牌名称与 Logo 轻改后） | 通过，仍存在既有 CSS minify warning 与大 chunk warning |
+| `2026-04-26` | `$env:JAVA_HOME='G:\\jdk'; .\\gradlew.bat :app:test --tests "com.nbwf.modules.jobdraft.service.JobDraftServiceUpdateItemTest"` | 红绿验证通过，确认职位草稿手动编辑不再创建 AI 生成任务 |
+| `2026-04-26` | `$env:JAVA_HOME='G:\\jdk'; .\\gradlew.bat :app:test --tests "com.nbwf.modules.jobdraft.service.JobDraftServiceUpdateItemTest" --tests "com.nbwf.modules.jobdraft.service.JobDraftServiceLatestBatchTest" --tests "com.nbwf.modules.jobdraft.service.JobDraftServiceImportItemsTest"` | 通过，验证职位草稿编辑、最近批次、导入链路 |
+| `2026-04-26` | `frontend -> npm.cmd run build`（职位草稿编辑接口切换后） | 通过，仍存在既有 CSS minify warning 与大 chunk warning |
 
 ## 6. 当前优先级
 
 | 优先级 | 模块 | 任务 | 说明 |
 |---:|---|---|---|
-| P0 | `jobdraft` | 回归 `BUG-010` | `BUG-008`、`BUG-009` 已手测通过；剩余职位草稿编辑/空态待确认 |
+| P0 | `jobdraft` | 手测回归 `BUG-010` | 代码已补强：手动编辑不再走 AI 任务表；仍需页面手测确认编辑和空态 |
 | P1 | `knowledgebase / rag-chat` | 回归 `BUG-011` | `BUG-012`、`BUG-013` 已手测通过；剩余知识库问答发送链路待确认 |
 | P1 | `backend` | 优先处理后端功能稳定性 | 前端大改暂停，仅保留品牌轻改；后续重心回到后端功能 |
 | P1 | `tests` | 补更多跨用户隔离与恢复回归测试 | 强化权限与链路稳定性 |
@@ -83,7 +86,7 @@
 | 项目 | 内容 |
 |---|---|
 | 目标 | 完成两批手测问题回归 |
-| 具体任务 | 前端只完成品牌名称/Logo 轻改；随后继续处理 `BUG-010` 职位草稿编辑/空态、`BUG-011` 知识库问答发送链路 |
+| 具体任务 | 提交职位草稿手动编辑补强后，继续处理 `BUG-011` 知识库问答发送链路 |
 | 完成标准 | 每个问题均手测通过，若有新问题继续拆成小任务单独提交/推送 |
 
 ## 8. 已识别风险与注意点
@@ -114,6 +117,7 @@
 | `90c5431` | fix | 重向量化入口改为明确文字按钮并补反馈 |
 | `c4a09b3` | fix | 问答助手新增/切换/改名补交互状态 |
 | `本次提交` | style | 前端品牌名称与 Logo 轻改 |
+| `本次提交` | fix | 职位草稿手动编辑绕开 AI 生成任务 |
 
 ## 10. 文档维护规则
 

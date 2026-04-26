@@ -415,7 +415,7 @@ export default function JobDraftPage() {
 
     try {
       const descriptionFull = form.descriptionFull.trim();
-      const updatedItem = await jobDraftApi.syncItemDetail(editingItem.draftItemId, {
+      const updatedItem = await jobDraftApi.updateItem(editingItem.draftItemId, {
         resumeId: batch.resumeId ?? undefined,
         title: form.title,
         company: form.company,

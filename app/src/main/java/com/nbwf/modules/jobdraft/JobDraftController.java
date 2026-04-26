@@ -56,6 +56,14 @@ public class JobDraftController {
         return Result.success(jobDraftService.syncItemDetail(draftItemId, req, userId));
     }
 
+    @Operation(summary = "编辑职位草稿")
+    @PutMapping("/items/{draftItemId}")
+    public Result<JobDraftItemDTO> updateItem(@PathVariable String draftItemId,
+                                              @Valid @RequestBody JobDraftDetailSyncRequest req,
+                                              @AuthenticationPrincipal Long userId) {
+        return Result.success(jobDraftService.updateItem(draftItemId, req, userId));
+    }
+
     @Operation(summary = "查询最近职位草稿批次")
     @GetMapping("/batches/latest")
     public Result<JobDraftBatchDTO> getLatestBatch(@AuthenticationPrincipal Long userId) {

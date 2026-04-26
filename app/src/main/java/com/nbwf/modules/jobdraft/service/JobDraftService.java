@@ -341,6 +341,11 @@ public class JobDraftService {
         return toItemDTO(itemRepository.save(item));
     }
 
+    @Transactional
+    public JobDraftItemDTO updateItem(String draftItemId, JobDraftDetailSyncRequest req, Long userId) {
+        return doSyncItemDetail(draftItemId, req, userId);
+    }
+
     private JobDraftBatchCreatedDTO withTaskId(JobDraftBatchCreatedDTO result, String taskId) {
         return new JobDraftBatchCreatedDTO(
             result.batchId(),

@@ -44,4 +44,8 @@ export const jobDraftApi = {
   async syncItemDetail(draftItemId: string, data: JobDraftDetailSyncForm): Promise<JobDraftItem> {
     return request.post<JobDraftItem>(`/api/job-drafts/items/${draftItemId}/detail-sync`, data);
   },
+
+  async updateItem(draftItemId: string, data: JobDraftDetailSyncForm): Promise<JobDraftItem> {
+    return request.put<JobDraftItem>(`/api/job-drafts/items/${draftItemId}`, data);
+  },
 };
