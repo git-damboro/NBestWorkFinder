@@ -1329,28 +1329,33 @@ function shortenText(value: string, maxLength = 80) {
 function normalizeOpenerText(value: string) {
   return value
     .replace(/[「」『』“”"《》（）()]/g, '')
-    .replace(/\s+/g, ' ')
+    .replace(/[ \t]+/g, ' ')
     .replace(/([\u4e00-\u9fa5])\s+([A-Za-z0-9])/g, '$1$2')
     .replace(/([A-Za-z0-9])\s+([\u4e00-\u9fa5])/g, '$1$2')
-    .replace(/[。！？!?]+$/g, '')
     .trim();
 }
 
 function buildBossOpenerDraft(job: JobDetail, resume: ResumeListItem | null, experiences: UserExperience[]) {
-  const jobTags = job.techTags.slice(0, 4).join('、');
-  const primaryExperience = experiences[0] ? shortenText(experiences[0].content, 58) : null;
-  const secondaryExperience = experiences[1] ? shortenText(experiences[1].content, 42) : null;
-  const resumeText = resume ? '我会用当前选中的简历投递' : '我可以补充发送简历';
+  const normalizedTitle = normalizeOpenerText(job.title);
+  const jobTags = job.techTags.slice(0, 3).map(normalizeOpenerText).filter(Boolean);
+  const directionText = jobTags.length > 0
+    ? jobTags.join('、')
+    : normalizeOpenerText(shortenText(job.description, 32));
+  const primaryExperience = experiences[0] ? normalizeOpenerText(shortenText(experiences[0].content, 54)) : null;
+  const secondaryExperience = experiences[1] ? normalizeOpenerText(shortenText(experiences[1].content, 36)) : null;
+  const resumeClose = resume
+    ? '这边附上我的简历，辛苦您看一下，期待进一步交流。'
+    : '后续我也可以补充发送简历，期待进一步交流。';
 
-  const parts = [
-    `您好，我主要关注${job.title}相关方向，和这个岗位的要求比较匹配`,
-    jobTags ? `尤其是${jobTags}这些方向我有持续积累` : '也比较关注岗位需要的后端能力和业务落地经验',
-    primaryExperience ? `之前有过${primaryExperience}相关经历` : null,
-    secondaryExperience ? `也补充做过${secondaryExperience}` : null,
-    `${resumeText}，想进一步了解一下岗位情况，方便的话可以沟通一下吗`,
-  ];
+  const firstParagraph = normalizeOpenerText(
+    `看到${normalizedTitle}岗位后想和您沟通一下，岗位里${directionText}这些方向和我目前关注的求职方向比较接近。`,
+  );
+  const experienceText = primaryExperience
+    ? `我之前主要做过${primaryExperience}${secondaryExperience ? `，也有${secondaryExperience}相关经历` : ''}，这些经历和岗位里需要的工程落地、协作开发或问题拆解能力有一定关联。`
+    : '我目前主要在补充相关项目和技术能力，也希望结合岗位要求继续深入学习和实践。';
+  const secondParagraph = normalizeOpenerText(`${experienceText}${resumeClose}`);
 
-  return normalizeOpenerText(parts.filter(Boolean).join('，'));
+  return `  ${firstParagraph}\n  ${secondParagraph}`;
 }
 
 function DeliveryPrepDialog({
