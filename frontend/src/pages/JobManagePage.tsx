@@ -6,6 +6,7 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  ChevronDown,
   ClipboardList,
   Edit3,
   Loader2,
@@ -990,8 +991,8 @@ function JobDetailModal({
           )}
 
           {!loading && !error && job && (
-            <div className="grid h-full min-h-0 lg:grid-cols-[320px,1fr]">
-              <aside className="min-h-0 overflow-y-auto border-b border-slate-100 bg-slate-50/80 p-6 dark:border-slate-800 dark:bg-slate-950/40 lg:border-b-0 lg:border-r">
+            <div className="grid h-full min-h-0 overflow-y-auto lg:grid-cols-[320px,1fr]">
+              <aside className="border-b border-slate-100 bg-slate-50/80 p-6 dark:border-slate-800 dark:bg-slate-950/40 lg:border-b-0 lg:border-r">
                 <div className="mb-4 flex flex-wrap items-center gap-2 pr-12">
                   <span
                     className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${getStatusBadgeClass(job.applicationStatus)}`}
@@ -1136,7 +1137,7 @@ function JobDetailModal({
                 </div>
               </aside>
 
-              <section className="min-h-0 overflow-y-auto p-6 lg:p-8">
+              <section className="p-6 lg:p-8">
                 <div className="mb-6 pr-12">
                   <p className="text-sm font-medium text-primary-500">职位详情</p>
                   <h3 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">
@@ -1268,81 +1269,128 @@ function FollowUpTimeline({
   followUpError,
   onRetryFollowUps,
 }: FollowUpTimelineProps) {
+  const [expanded, setExpanded] = useState(false);
+  const latestFollowUp = followUps[0] ?? null;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [job.id]);
+
   return (
-    <div className="mt-6 rounded-2xl border border-primary-100 bg-primary-50/40 p-5 dark:border-primary-800/60 dark:bg-primary-900/10">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-            投递跟进时间线
-          </h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            状态变化会自动记录，也可以手动添加沟通、面试和备注。
-          </p>
+    <div className="mt-6">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="w-full rounded-2xl border border-primary-100 bg-primary-50/70 p-4 text-left shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-100/70 dark:border-primary-800/60 dark:bg-primary-900/10 dark:hover:bg-primary-900/20"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                投递跟进时间线
+              </span>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusBadgeClass(job.applicationStatus)}`}>
+                {jobStatusLabelMap[job.applicationStatus]}
+              </span>
+            </div>
+            <p className="mt-2 truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+              {loadingFollowUps
+                ? '正在加载当前进度...'
+                : followUpError
+                  ? '跟进记录加载失败，点击展开后可重试'
+                  : latestFollowUp
+                    ? latestFollowUp.title
+                    : '暂无跟进记录'}
+            </p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {latestFollowUp
+                ? `最近更新：${formatDateTime(latestFollowUp.createdAt)}`
+                : job.appliedAt
+                  ? `投递于：${formatDateTime(job.appliedAt)}`
+                  : '点击后查看全部跟进进度'}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-primary-600 dark:text-primary-300">
+            {loadingFollowUps && <Loader2 className="h-4 w-4 animate-spin" />}
+            <span>{expanded ? '收起' : '展开'}</span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </div>
         </div>
-        {job.appliedAt && (
-          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
-            投递于 {formatDateTime(job.appliedAt)}
-          </span>
-        )}
-      </div>
+      </button>
 
-      {loadingFollowUps && (
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          正在加载跟进记录...
-        </div>
-      )}
+      {expanded && (
+        <div className="mt-3 rounded-2xl border border-primary-100 bg-primary-50/40 p-4 dark:border-primary-800/60 dark:bg-primary-900/10">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              状态变化会自动记录，也可以手动添加沟通、面试和备注。
+            </p>
+            {job.appliedAt && (
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+                投递于 {formatDateTime(job.appliedAt)}
+              </span>
+            )}
+          </div>
 
-      {!loadingFollowUps && followUpError && (
-        <button
-          type="button"
-          onClick={onRetryFollowUps}
-          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/60 dark:bg-red-900/20 dark:text-red-200"
-        >
-          {followUpError}，点击重试
-        </button>
-      )}
+          {loadingFollowUps && (
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              正在加载跟进记录...
+            </div>
+          )}
 
-      {!loadingFollowUps && !followUpError && followUps.length === 0 && (
-        <p className="rounded-xl bg-white px-3 py-4 text-sm text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-400">
-          还没有跟进记录。点击左侧“标记已投递”或“添加跟进”后，记录会显示在这里。
-        </p>
-      )}
+          {!loadingFollowUps && followUpError && (
+            <button
+              type="button"
+              onClick={onRetryFollowUps}
+              className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/60 dark:bg-red-900/20 dark:text-red-200"
+            >
+              {followUpError}，点击重试
+            </button>
+          )}
 
-      {!loadingFollowUps && !followUpError && followUps.length > 0 && (
-        <div className="space-y-3">
-          {followUps.map((record) => (
-            <div key={record.id} className="rounded-xl bg-white p-3 shadow-sm dark:bg-slate-800">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-200">
-                    {jobFollowUpTypeLabelMap[record.type]}
-                  </span>
-                  {record.contactMethod && (
+          {!loadingFollowUps && !followUpError && followUps.length === 0 && (
+            <p className="rounded-xl bg-white px-3 py-4 text-sm text-slate-500 shadow-sm dark:bg-slate-800 dark:text-slate-400">
+              还没有跟进记录。点击左侧“标记已投递”或“添加跟进”后，记录会显示在这里。
+            </p>
+          )}
+
+          {!loadingFollowUps && !followUpError && followUps.length > 0 && (
+            <div className="space-y-3">
+              {followUps.map((record) => (
+                <div key={record.id} className="rounded-xl bg-white p-3 shadow-sm dark:bg-slate-800">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-200">
+                        {jobFollowUpTypeLabelMap[record.type]}
+                      </span>
+                      {record.contactMethod && (
+                        <span className="text-xs text-slate-400 dark:text-slate-500">
+                          {record.contactMethod}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-slate-400 dark:text-slate-500">
-                      {record.contactMethod}
+                      {formatDateTime(record.createdAt)}
                     </span>
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-100">
+                    {record.title}
+                  </p>
+                  {record.content && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-300">
+                      {record.content}
+                    </p>
+                  )}
+                  {record.nextFollowUpAt && (
+                    <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-300">
+                      下次跟进：{formatDateTime(record.nextFollowUpAt)}
+                    </p>
                   )}
                 </div>
-                <span className="text-xs text-slate-400 dark:text-slate-500">
-                  {formatDateTime(record.createdAt)}
-                </span>
-              </div>
-              <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-100">
-                {record.title}
-              </p>
-              {record.content && (
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-300">
-                  {record.content}
-                </p>
-              )}
-              {record.nextFollowUpAt && (
-                <p className="mt-2 text-xs font-medium text-amber-600 dark:text-amber-300">
-                  下次跟进：{formatDateTime(record.nextFollowUpAt)}
-                </p>
-              )}
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
