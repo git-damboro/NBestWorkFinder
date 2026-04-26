@@ -4,33 +4,56 @@
     <meta charset="utf-8" />
     <title>NBestWorkFinder 辅助投递</title>
     <style>
+      :root {
+        color-scheme: light;
+        --text: #0f172a;
+        --muted: #64748b;
+        --line: #dbe3ef;
+        --panel: #ffffff;
+        --soft: #f1f5f9;
+        --brand: #10b981;
+        --brand-dark: #059669;
+      }
+
       body {
-        width: 360px;
+        width: 340px;
         margin: 0;
         padding: 16px;
-        color: #0f172a;
+        color: var(--text);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #f8fafc;
+        background:
+          radial-gradient(circle at top left, rgba(16, 185, 129, 0.18), transparent 34%),
+          #f8fafc;
       }
 
       h1 {
         margin: 0;
         font-size: 18px;
+        letter-spacing: -0.02em;
       }
 
       p {
         margin: 8px 0 0;
-        color: #64748b;
+        color: var(--muted);
         font-size: 13px;
         line-height: 1.6;
       }
 
+      .card {
+        margin-top: 14px;
+        border: 1px solid rgba(219, 227, 239, 0.9);
+        border-radius: 18px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+      }
+
       label {
         display: block;
-        margin-top: 14px;
+        margin-top: 12px;
         color: #334155;
-        font-size: 13px;
-        font-weight: 600;
+        font-size: 12px;
+        font-weight: 700;
       }
 
       input,
@@ -39,35 +62,43 @@
         width: 100%;
         margin-top: 6px;
         border: 1px solid #cbd5e1;
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 9px 10px;
-        color: #0f172a;
-        font-size: 13px;
+        color: var(--text);
+        font-size: 12px;
         outline: none;
         background: #fff;
       }
 
       textarea {
-        min-height: 72px;
+        min-height: 64px;
         resize: vertical;
       }
 
       button {
         width: 100%;
-        margin-top: 14px;
+        margin-top: 12px;
         border: 0;
-        border-radius: 12px;
-        padding: 10px 12px;
+        border-radius: 14px;
+        padding: 11px 12px;
         color: white;
         font-size: 14px;
-        font-weight: 700;
+        font-weight: 800;
         cursor: pointer;
-        background: #10b981;
+        background: var(--brand);
+      }
+
+      button:hover {
+        background: var(--brand-dark);
       }
 
       button.secondary {
-        color: #0f172a;
+        color: var(--text);
         background: #e2e8f0;
+      }
+
+      button.secondary:hover {
+        background: #cbd5e1;
       }
 
       button:disabled {
@@ -75,13 +106,27 @@
         opacity: 0.65;
       }
 
+      details {
+        margin-top: 12px;
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+      }
+
+      summary {
+        cursor: pointer;
+        color: #475569;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
       .status {
         margin-top: 12px;
-        border-radius: 12px;
+        border-radius: 14px;
         padding: 10px;
         font-size: 13px;
         line-height: 1.6;
-        background: #fff;
+        background: var(--panel);
+        white-space: pre-wrap;
       }
 
       .success {
@@ -97,23 +142,30 @@
   </head>
   <body>
     <h1>NBestWorkFinder 辅助投递</h1>
-    <p>第一版支持 Chrome/Edge，优先识别 BOSS 直聘岗位页。导入前请确保本地后端已启动。</p>
+    <p>打开 BOSS 岗位页后，一键采集岗位并进入系统复制开场白。</p>
 
-    <label for="apiBase">后端地址</label>
-    <input id="apiBase" value="http://localhost:8080" />
+    <div class="card">
+      <button id="importJob">采集岗位并准备投递</button>
+      <button id="openApp" class="secondary">打开职位工作台</button>
 
-    <label for="frontendBase">前端地址</label>
-    <input id="frontendBase" value="http://localhost:5173" />
+      <details>
+        <summary>设置与登录态</summary>
 
-    <label for="accessToken">登录 Token</label>
-    <textarea id="accessToken" placeholder="从系统登录态中复制 accessToken 后粘贴到这里"></textarea>
+        <label for="apiBase">后端地址</label>
+        <input id="apiBase" value="http://localhost:8080" />
 
-    <button id="loadToken" class="secondary">从已登录前端读取 Token</button>
-    <button id="saveConfig" class="secondary">保存配置</button>
-    <button id="importJob">采集并导入当前岗位</button>
-    <button id="openApp" class="secondary">打开职位工作台</button>
+        <label for="frontendBase">前端地址</label>
+        <input id="frontendBase" value="http://localhost:5173" />
 
-    <div id="status" class="status">等待操作。</div>
+        <label for="accessToken">登录 Token</label>
+        <textarea id="accessToken" placeholder="通常不需要手动填写，点击下方按钮从已登录前端读取"></textarea>
+
+        <button id="loadToken" class="secondary">从已登录前端读取 Token</button>
+        <button id="saveConfig" class="secondary">保存配置</button>
+      </details>
+
+      <div id="status" class="status">等待操作</div>
+    </div>
 
     <script src="popup.js"></script>
   </body>

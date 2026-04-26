@@ -192,9 +192,12 @@ export default function JobManagePage() {
   // 通过 ref 记录当前选中项，避免因为列表刷新函数依赖 selectedJobId 而反复重新请求列表。
   const selectedJobIdRef = useRef<number | null>(null);
   const detailRequestIdRef = useRef(0);
+  const pendingDeliveryPrepJobIdRef = useRef<number | null>(null);
   const routeSelectedJobId = (location.state as { selectedJobId?: number } | null)?.selectedJobId ?? null;
-  const querySelectedJobId = Number(new URLSearchParams(location.search).get('selectedJobId'));
+  const queryParams = new URLSearchParams(location.search);
+  const querySelectedJobId = Number(queryParams.get('selectedJobId'));
   const importedSelectedJobId = Number.isFinite(querySelectedJobId) && querySelectedJobId > 0 ? querySelectedJobId : null;
+  const shouldOpenDeliveryPrep = queryParams.get('deliveryPrep') === '1';
 
   useEffect(() => {
     selectedJobIdRef.current = selectedJobId;
@@ -209,9 +212,14 @@ export default function JobManagePage() {
     // 从简历详情页保存职位草稿后，优先聚焦刚创建的职位。
     selectedJobIdRef.current = nextSelectedJobId;
     setSelectedJobId(nextSelectedJobId);
-    setDetailModalOpen(true);
+    if (shouldOpenDeliveryPrep) {
+      pendingDeliveryPrepJobIdRef.current = nextSelectedJobId;
+      setDetailModalOpen(false);
+    } else {
+      setDetailModalOpen(true);
+    }
     navigate(location.pathname, { replace: true, state: null });
-  }, [routeSelectedJobId, importedSelectedJobId, navigate, location.pathname]);
+  }, [routeSelectedJobId, importedSelectedJobId, shouldOpenDeliveryPrep, navigate, location.pathname]);
 
   const loadFollowUps = useCallback(async (jobId: number) => {
     setLoadingFollowUps(true);
@@ -437,6 +445,22 @@ export default function JobManagePage() {
     void loadDeliveryExperiences();
     void loadDeliveryResumes();
   };
+
+  useEffect(() => {
+    if (
+      !selectedJob ||
+      loadingDetail ||
+      pendingDeliveryPrepJobIdRef.current !== selectedJob.id
+    ) {
+      return;
+    }
+
+    pendingDeliveryPrepJobIdRef.current = null;
+    setDeliveryPrepError(null);
+    setDeliveryPrepOpen(true);
+    void loadDeliveryExperiences();
+    void loadDeliveryResumes();
+  }, [selectedJob, loadingDetail, loadDeliveryExperiences, loadDeliveryResumes]);
 
   const openJobDetail = (jobId: number) => {
     setActionError(null);
@@ -1933,9 +1957,12 @@ function DeliveryPrepDialog({
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-primary-100 bg-primary-50/30 p-5 dark:border-primary-800/60 dark:bg-primary-900/10">
+                <div className="rounded-3xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-white p-5 shadow-lg shadow-emerald-500/10 dark:border-emerald-800/70 dark:from-emerald-900/20 dark:via-slate-900 dark:to-slate-900">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
+                      <span className="mb-2 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+                        可直接复制发送
+                      </span>
                       <h3 className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-100">
                         <FileText className="h-4 w-4 text-primary-500" />
                         Boss 开场白草稿
@@ -1971,7 +1998,7 @@ function DeliveryPrepDialog({
                       setCopied(false);
                       setCopyError(null);
                     }}
-                    className="mt-4 min-h-72 w-full resize-y rounded-2xl border border-primary-100 bg-white px-4 py-3 text-sm leading-7 text-slate-700 outline-none transition-colors focus:border-primary-400 dark:border-primary-800/60 dark:bg-slate-900 dark:text-slate-100"
+                    className="mt-4 min-h-72 w-full resize-y rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 shadow-inner outline-none transition-colors focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 dark:border-emerald-800/60 dark:bg-slate-950 dark:text-slate-100"
                     placeholder="点击“重新生成”创建开场白草稿"
                   />
 

@@ -708,7 +708,7 @@ async function importJob() {
     const importedJob = result.data;
     setStatus(`导入成功：${importedJob.title} · ${importedJob.company}`, 'success');
     await chrome.tabs.create({
-      url: `${frontendBase.replace(/\/$/, '')}/jobs?selectedJobId=${importedJob.id}`,
+      url: `${frontendBase.replace(/\/$/, '')}/jobs?selectedJobId=${importedJob.id}&deliveryPrep=1`,
     });
   } catch (error) {
     setStatus(error instanceof Error ? error.message : '导入失败', 'error');
