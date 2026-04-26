@@ -26,6 +26,9 @@ public class CorsConfig {
         Arrays.stream(allowedOrigins.split(","))
               .map(String::trim)
               .forEach(config::addAllowedOrigin);
+
+        config.addAllowedOriginPattern("chrome-extension://*");
+        config.addAllowedOriginPattern("edge-extension://*");
         
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

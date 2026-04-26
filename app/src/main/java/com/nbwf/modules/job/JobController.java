@@ -33,6 +33,13 @@ public class JobController {
         return Result.success(jobService.create(req, userId));
     }
 
+    @Operation(summary = "从浏览器插件导入职位")
+    @PostMapping("/import")
+    public Result<JobDetailDTO> importJob(@Valid @RequestBody ImportJobRequest req,
+                                          @AuthenticationPrincipal Long userId) {
+        return Result.success(jobService.importJob(req, userId));
+    }
+
     @Operation(summary = "我的职位列表，可按求职状态筛选")
     @GetMapping
     public Result<List<JobListItemDTO>> list(@AuthenticationPrincipal Long userId,

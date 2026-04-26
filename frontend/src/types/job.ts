@@ -14,6 +14,9 @@ export interface JobListItem {
   salaryMax: number | null;
   techTags: string[];
   applicationStatus: JobApplicationStatus;
+  sourcePlatform: string | null;
+  sourceUrl: string | null;
+  externalJobId: string | null;
   createdAt: string;
   appliedAt: string | null;
   lastFollowUpAt: string | null;
@@ -31,6 +34,9 @@ export interface JobDetail {
   techTags: string[];
   applicationStatus: JobApplicationStatus;
   notes: string | null;
+  sourcePlatform: string | null;
+  sourceUrl: string | null;
+  externalJobId: string | null;
   createdAt: string;
   updatedAt: string;
   appliedAt: string | null;
@@ -62,6 +68,21 @@ export interface CreateJobForm {
   location?: string;
   salaryMin?: number;
   salaryMax?: number;
+  notes?: string;
+}
+
+export interface ImportJobForm {
+  sourcePlatform: string;
+  externalJobId?: string;
+  sourceUrl?: string;
+  title: string;
+  company: string;
+  location?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryText?: string;
+  description: string;
+  techTags?: string[];
   notes?: string;
 }
 

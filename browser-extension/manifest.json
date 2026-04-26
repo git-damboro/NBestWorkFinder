@@ -1,47 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "NBWF 求职助手",
+  "name": "NBestWorkFinder 辅助投递",
+  "description": "从当前招聘页面采集岗位信息并导入 NBestWorkFinder。",
   "version": "0.1.0",
-  "description": "在 BOSS 页面同步职位到 NBWF，并补全职位详情 JD。",
-  "permissions": [
-    "storage",
-    "tabs"
-  ],
-  "host_permissions": [
-    "https://www.zhipin.com/*",
-    "https://*.zhipin.com/*",
-    "http://localhost:5173/*",
-    "http://127.0.0.1:5173/*",
-    "http://localhost:8080/*",
-    "http://127.0.0.1:8080/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "action": {
-    "default_title": "NBWF 求职助手",
+    "default_title": "导入岗位",
     "default_popup": "popup.html"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "http://localhost:5173/*",
-        "http://127.0.0.1:5173/*"
-      ],
-      "js": [
-        "content-app.js"
-      ],
-      "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://www.zhipin.com/*",
-        "https://*.zhipin.com/*"
-      ],
-      "js": [
-        "content-boss.js"
-      ],
-      "run_at": "document_idle"
-    }
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "http://localhost:8080/*",
+    "http://localhost:5173/*",
+    "https://*.zhipin.com/*"
   ]
 }

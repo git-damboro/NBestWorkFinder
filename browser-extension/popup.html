@@ -1,71 +1,118 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NBWF 求职助手</title>
-    <link rel="stylesheet" href="popup.css" />
+    <meta charset="utf-8" />
+    <title>NBestWorkFinder 辅助投递</title>
+    <style>
+      body {
+        width: 360px;
+        margin: 0;
+        padding: 16px;
+        color: #0f172a;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f8fafc;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      p {
+        margin: 8px 0 0;
+        color: #64748b;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      label {
+        display: block;
+        margin-top: 14px;
+        color: #334155;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      input,
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        margin-top: 6px;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 9px 10px;
+        color: #0f172a;
+        font-size: 13px;
+        outline: none;
+        background: #fff;
+      }
+
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+
+      button {
+        width: 100%;
+        margin-top: 14px;
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        color: white;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        background: #10b981;
+      }
+
+      button.secondary {
+        color: #0f172a;
+        background: #e2e8f0;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .status {
+        margin-top: 12px;
+        border-radius: 12px;
+        padding: 10px;
+        font-size: 13px;
+        line-height: 1.6;
+        background: #fff;
+      }
+
+      .success {
+        color: #047857;
+        background: #ecfdf5;
+      }
+
+      .error {
+        color: #b91c1c;
+        background: #fef2f2;
+      }
+    </style>
   </head>
   <body>
-    <main class="popup">
-      <header class="header">
-        <h1>NBWF 求职助手</h1>
-        <button id="refreshButton" class="ghost-button" type="button">刷新</button>
-      </header>
+    <h1>NBestWorkFinder 辅助投递</h1>
+    <p>第一版支持 Chrome/Edge，优先识别 BOSS 直聘岗位页。导入前请确保本地后端已启动。</p>
 
-      <section class="panel">
-        <div class="panel-title">当前状态</div>
-        <div id="statusBadge" class="badge badge-neutral">初始化中</div>
-        <p id="statusText" class="muted">正在读取扩展上下文…</p>
-      </section>
+    <label for="apiBase">后端地址</label>
+    <input id="apiBase" value="http://localhost:8080" />
 
-      <section class="panel">
-        <div class="panel-title">简历上下文</div>
-        <label class="field">
-          <span>用于匹配的简历</span>
-          <select id="resumeSelect"></select>
-        </label>
-        <p class="hint">
-          扩展会优先使用这里选择的简历；若未选择，则沿用最近草稿批次绑定的简历。
-        </p>
-      </section>
+    <label for="frontendBase">前端地址</label>
+    <input id="frontendBase" value="http://localhost:5173" />
 
-      <section class="panel">
-        <div class="panel-title">快捷操作</div>
-        <div class="actions">
-          <button id="syncListButton" type="button" class="primary-button">同步当前页职位</button>
-          <button id="syncDetailButton" type="button" class="secondary-button">补全当前 JD</button>
-          <button id="openDraftButton" type="button" class="secondary-button">打开职位草稿</button>
-          <button id="restoreBatchButton" type="button" class="secondary-button">恢复最近批次</button>
-        </div>
-        <p id="actionHint" class="hint">扩展会根据当前页面类型给出可执行操作。</p>
-      </section>
+    <label for="accessToken">登录 Token</label>
+    <textarea id="accessToken" placeholder="从系统登录态中复制 accessToken 后粘贴到这里"></textarea>
 
-      <section class="panel">
-        <div class="panel-title">最近批次</div>
-        <div id="batchBox" class="task-box">
-          <div id="batchTitle" class="task-title">暂无最近批次</div>
-          <div id="batchMeta" class="task-meta">等待同步</div>
-        </div>
-      </section>
+    <button id="saveConfig" class="secondary">保存配置</button>
+    <button id="importJob">采集并导入当前岗位</button>
+    <button id="openApp" class="secondary">打开职位工作台</button>
 
-      <section class="panel">
-        <div class="panel-title">最近任务</div>
-        <div id="taskBox" class="task-box">
-          <div id="taskTitle" class="task-title">暂无后台任务</div>
-          <div id="taskMeta" class="task-meta">等待执行</div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-title">使用说明</div>
-        <ol class="steps">
-          <li>先打开 NBWF 系统页面并登录一次，扩展会自动同步登录态。</li>
-          <li>在 BOSS 列表页点击“同步当前页职位”，生成职位草稿批次。</li>
-          <li>打开某个职位详情页后点击“补全当前 JD”，补全详细信息与匹配结果。</li>
-        </ol>
-      </section>
-    </main>
+    <div id="status" class="status">等待操作。</div>
 
     <script src="popup.js"></script>
   </body>

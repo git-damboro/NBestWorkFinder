@@ -190,22 +190,25 @@ export default function JobManagePage() {
   const selectedJobIdRef = useRef<number | null>(null);
   const detailRequestIdRef = useRef(0);
   const routeSelectedJobId = (location.state as { selectedJobId?: number } | null)?.selectedJobId ?? null;
+  const querySelectedJobId = Number(new URLSearchParams(location.search).get('selectedJobId'));
+  const importedSelectedJobId = Number.isFinite(querySelectedJobId) && querySelectedJobId > 0 ? querySelectedJobId : null;
 
   useEffect(() => {
     selectedJobIdRef.current = selectedJobId;
   }, [selectedJobId]);
 
   useEffect(() => {
-    if (routeSelectedJobId === null) {
+    const nextSelectedJobId = routeSelectedJobId ?? importedSelectedJobId;
+    if (nextSelectedJobId === null) {
       return;
     }
 
     // 从简历详情页保存职位草稿后，优先聚焦刚创建的职位。
-    selectedJobIdRef.current = routeSelectedJobId;
-    setSelectedJobId(routeSelectedJobId);
+    selectedJobIdRef.current = nextSelectedJobId;
+    setSelectedJobId(nextSelectedJobId);
     setDetailModalOpen(true);
     navigate(location.pathname, { replace: true, state: null });
-  }, [routeSelectedJobId, navigate, location.pathname]);
+  }, [routeSelectedJobId, importedSelectedJobId, navigate, location.pathname]);
 
   const loadFollowUps = useCallback(async (jobId: number) => {
     setLoadingFollowUps(true);
@@ -1346,6 +1349,28 @@ function JobDetailModal({
                     value={job.nextFollowUpAt ? formatDateTime(job.nextFollowUpAt) : '未设置'}
                   />
                 </div>
+
+                {(job.sourcePlatform || job.sourceUrl || job.externalJobId) && (
+                  <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5 dark:border-emerald-800/60 dark:bg-emerald-900/10">
+                    <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      岗位来源
+                    </h3>
+                    <div className="space-y-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                      {job.sourcePlatform && <p>来源平台：{job.sourcePlatform}</p>}
+                      {job.externalJobId && <p>外部职位 ID：{job.externalJobId}</p>}
+                      {job.sourceUrl && (
+                        <a
+                          href={job.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="break-all text-emerald-700 hover:underline dark:text-emerald-300"
+                        >
+                          打开原始岗位链接
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
                   <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">

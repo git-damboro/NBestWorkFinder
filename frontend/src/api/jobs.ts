@@ -3,6 +3,7 @@ import type { AiGenerationTask } from '../types/ai-generation-task';
 import type { JobDraftBatchCreated } from '../types/job-draft';
 import type {
   CreateJobForm,
+  ImportJobForm,
   JobDetailSyncForm,
   JobApplicationStatus,
   JobDetail,
@@ -35,6 +36,10 @@ export const jobApi = {
    */
   async createJob(data: CreateJobForm): Promise<JobDetail> {
     return request.post<JobDetail>('/api/jobs', data);
+  },
+
+  async importJob(data: ImportJobForm): Promise<JobDetail> {
+    return request.post<JobDetail>('/api/jobs/import', data);
   },
 
   /**

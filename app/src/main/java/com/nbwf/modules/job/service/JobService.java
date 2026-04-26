@@ -20,6 +20,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,6 +58,50 @@ public class JobService {
         job.setNotes(req.getNotes());
 
         List<String> tags = extractTagsSafely(req.getTitle(), req.getDescription());
+        job.setTechTags(joinTags(tags));
+
+        return toDetailDTO(jobRepository.save(job));
+    }
+
+    @Transactional
+    public JobDetailDTO importJob(ImportJobRequest req, Long userId) {
+        String title = requireTrimmed(req.title(), "职位名称不能为空");
+        String company = requireTrimmed(req.company(), "公司名称不能为空");
+        String description = requireTrimmed(req.description(), "职位描述不能为空");
+        String sourcePlatform = requireTrimmed(req.sourcePlatform(), "来源平台不能为空");
+        String sourceUrl = trimToNull(req.sourceUrl());
+        String externalJobId = trimToNull(req.externalJobId());
+        String sourceFingerprint = buildSourceFingerprint(sourcePlatform, externalJobId, sourceUrl, title, company);
+
+        JobEntity job = jobRepository.findFirstByUserIdAndSourceFingerprint(userId, sourceFingerprint)
+            .orElseGet(JobEntity::new);
+        boolean creating = job.getId() == null;
+
+        if (creating) {
+            job.setUserId(userId);
+            job.setApplicationStatus(JobApplicationStatus.SAVED);
+        }
+
+        job.setTitle(title);
+        job.setCompany(company);
+        job.setDescription(description);
+        job.setLocation(trimToNull(req.location()));
+        job.setSalaryMin(req.salaryMin());
+        job.setSalaryMax(req.salaryMax());
+        job.setSourcePlatform(sourcePlatform);
+        job.setSourceUrl(sourceUrl);
+        job.setExternalJobId(externalJobId);
+        job.setSourceFingerprint(sourceFingerprint);
+        job.setJdCompleteness(description.length() >= 80 ? "COMPLETED" : "PARTIAL");
+
+        String notes = buildImportNotes(req.notes(), req.salaryText(), sourcePlatform, sourceUrl);
+        if (notes != null) {
+            job.setNotes(notes);
+        }
+
+        List<String> tags = req.techTags() == null || req.techTags().isEmpty()
+            ? extractTagsSafely(title, description)
+            : sanitizeTags(req.techTags());
         job.setTechTags(joinTags(tags));
 
         return toDetailDTO(jobRepository.save(job));
@@ -264,6 +311,77 @@ public class JobService {
         }
     }
 
+    private String buildImportNotes(String notes, String salaryText, String sourcePlatform, String sourceUrl) {
+        StringBuilder builder = new StringBuilder();
+        String trimmedNotes = trimToNull(notes);
+        String trimmedSalaryText = trimToNull(salaryText);
+
+        if (trimmedNotes != null) {
+            builder.append(trimmedNotes);
+        }
+        if (trimmedSalaryText != null) {
+            appendNoteLine(builder, "原始薪资：" + trimmedSalaryText);
+        }
+        appendNoteLine(builder, "来源：" + sourcePlatform);
+        if (sourceUrl != null) {
+            appendNoteLine(builder, "原始链接：" + sourceUrl);
+        }
+
+        return builder.isEmpty() ? null : builder.toString();
+    }
+
+    private void appendNoteLine(StringBuilder builder, String line) {
+        if (!builder.isEmpty()) {
+            builder.append('\n');
+        }
+        builder.append(line);
+    }
+
+    private String requireTrimmed(String value, String message) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, message);
+        }
+        return trimmed;
+    }
+
+    private String buildSourceFingerprint(String sourcePlatform,
+                                          String externalJobId,
+                                          String sourceUrl,
+                                          String title,
+                                          String company) {
+        String raw;
+        if (externalJobId != null) {
+            raw = sourcePlatform + ":id:" + externalJobId;
+        } else if (sourceUrl != null) {
+            raw = sourcePlatform + ":url:" + normalizeSourceUrl(sourceUrl);
+        } else {
+            raw = sourcePlatform + ":job:" + title.toLowerCase() + ":" + company.toLowerCase();
+        }
+        return sha256Hex(raw);
+    }
+
+    private String normalizeSourceUrl(String sourceUrl) {
+        int hashIndex = sourceUrl.indexOf('#');
+        String withoutHash = hashIndex >= 0 ? sourceUrl.substring(0, hashIndex) : sourceUrl;
+        int queryIndex = withoutHash.indexOf('?');
+        return (queryIndex >= 0 ? withoutHash.substring(0, queryIndex) : withoutHash).trim().toLowerCase();
+    }
+
+    private String sha256Hex(String raw) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(raw.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte item : bytes) {
+                builder.append(String.format("%02x", item));
+            }
+            return builder.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "职位来源指纹生成失败");
+        }
+    }
+
     private String joinTags(List<String> tags) {
         return tags.isEmpty() ? null : String.join(",", tags);
     }
@@ -303,6 +421,9 @@ public class JobService {
             job.getSalaryMax(),
             splitTags(job.getTechTags()),
             job.getApplicationStatus(),
+            job.getSourcePlatform(),
+            job.getSourceUrl(),
+            job.getExternalJobId(),
             job.getCreatedAt(),
             job.getAppliedAt(),
             job.getLastFollowUpAt(),
@@ -322,6 +443,9 @@ public class JobService {
             splitTags(job.getTechTags()),
             job.getApplicationStatus(),
             job.getNotes(),
+            job.getSourcePlatform(),
+            job.getSourceUrl(),
+            job.getExternalJobId(),
             job.getCreatedAt(),
             job.getUpdatedAt(),
             job.getAppliedAt(),
