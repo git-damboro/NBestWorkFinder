@@ -330,6 +330,20 @@ public class JobService {
         return builder.isEmpty() ? null : builder.toString();
     }
 
+    private String extractOriginalSalaryText(String notes) {
+        String trimmedNotes = trimToNull(notes);
+        if (trimmedNotes == null) {
+            return null;
+        }
+        return Arrays.stream(trimmedNotes.split("\\R"))
+            .map(String::trim)
+            .filter(line -> line.startsWith("原始薪资："))
+            .map(line -> trimToNull(line.substring("原始薪资：".length())))
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElse(null);
+    }
+
     private void appendNoteLine(StringBuilder builder, String line) {
         if (!builder.isEmpty()) {
             builder.append('\n');
@@ -419,6 +433,7 @@ public class JobService {
             job.getLocation(),
             job.getSalaryMin(),
             job.getSalaryMax(),
+            extractOriginalSalaryText(job.getNotes()),
             splitTags(job.getTechTags()),
             job.getApplicationStatus(),
             job.getSourcePlatform(),
@@ -440,6 +455,7 @@ public class JobService {
             job.getLocation(),
             job.getSalaryMin(),
             job.getSalaryMax(),
+            extractOriginalSalaryText(job.getNotes()),
             splitTags(job.getTechTags()),
             job.getApplicationStatus(),
             job.getNotes(),

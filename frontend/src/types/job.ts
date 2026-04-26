@@ -12,6 +12,7 @@ export interface JobListItem {
   location: string | null;
   salaryMin: number | null;
   salaryMax: number | null;
+  salaryText: string | null;
   techTags: string[];
   applicationStatus: JobApplicationStatus;
   sourcePlatform: string | null;
@@ -31,6 +32,7 @@ export interface JobDetail {
   location: string | null;
   salaryMin: number | null;
   salaryMax: number | null;
+  salaryText: string | null;
   techTags: string[];
   applicationStatus: JobApplicationStatus;
   notes: string | null;

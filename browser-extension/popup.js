@@ -266,14 +266,17 @@ function extractCurrentPageJob() {
 
   function parseInjectedSalaryText(value) {
     const normalized = cleanInjectedText(value).toUpperCase();
-    const rangeMatch = normalized.match(/(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*K/);
+    if (normalized.includes('面议')) {
+      return {};
+    }
+    const rangeMatch = normalized.match(/(\d+(?:\.\d+)?)\s*[-~－—]\s*(\d+(?:\.\d+)?)\s*[KＫ]/);
     if (rangeMatch) {
       return {
         salaryMin: Math.round(Number(rangeMatch[1]) * 1000),
         salaryMax: Math.round(Number(rangeMatch[2]) * 1000),
       };
     }
-    const singleMatch = normalized.match(/(\d+(?:\.\d+)?)\s*K/);
+    const singleMatch = normalized.match(/(\d+(?:\.\d+)?)\s*[KＫ]/);
     if (singleMatch) {
       return {
         salaryMin: Math.round(Number(singleMatch[1]) * 1000),
@@ -281,6 +284,28 @@ function extractCurrentPageJob() {
       };
     }
     return {};
+  }
+
+  function extractInjectedSalaryTextFromText(value) {
+    const text = cleanInjectedText(value);
+    if (!text) {
+      return '';
+    }
+    if (text.includes('面议')) {
+      return '面议';
+    }
+
+    const rangeMatch = text.match(/\d+(?:\.\d+)?\s*[-~－—]\s*\d+(?:\.\d+)?\s*[kKＫ](?:\s*[·・.]\s*\d+\s*薪)?/);
+    if (rangeMatch) {
+      return cleanInjectedText(rangeMatch[0]).replace(/\s+/g, '');
+    }
+
+    const singleMatch = text.match(/\d+(?:\.\d+)?\s*[kKＫ](?:\s*[·・.]\s*\d+\s*薪)?/);
+    if (singleMatch) {
+      return cleanInjectedText(singleMatch[0]).replace(/\s+/g, '');
+    }
+
+    return '';
   }
 
   function extractInjectedTechTags(text) {
@@ -397,18 +422,27 @@ function extractCurrentPageJob() {
   const salaryText = getInjectedTextBySelectorsIn(detailRoot, [
     '.salary',
     '.job-salary',
+    '.salary-text',
+    '.job-card-right .salary',
+    '.job-info .salary',
     '[class*="salary"]',
   ]) || (selectedCard ? getInjectedTextBySelectorsIn(selectedCard, [
     '.salary',
     '.job-salary',
+    '.salary-text',
+    '.job-card-right .salary',
+    '.job-info .salary',
     '[class*="salary"]',
-  ]) : '') || getInjectedTextBySelectors([
+  ]) : '') || extractInjectedSalaryTextFromText(detailText.slice(0, 800))
+    || (selectedCard ? extractInjectedSalaryTextFromText(selectedCard.innerText || selectedCard.textContent || '') : '')
+    || getInjectedTextBySelectors([
     '.job-banner .salary',
     '.job-primary .salary',
     '.salary',
     '.job-salary',
+    '.salary-text',
     '[class*="salary"]',
-  ]);
+  ]) || extractInjectedSalaryTextFromText(document.body.innerText.slice(0, 1500));
   const matchedCard = findBossSelectedCard(title, salaryText) || selectedCard;
   const companyFromText = (() => {
     const text = cleanInjectedText(detailText);

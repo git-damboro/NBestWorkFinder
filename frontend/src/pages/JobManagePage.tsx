@@ -46,7 +46,7 @@ const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
   ...jobStatusOptions,
 ];
 
-function formatSalaryRange(salaryMin: number | null, salaryMax: number | null) {
+function formatSalaryRange(salaryMin: number | null, salaryMax: number | null, salaryText?: string | null) {
   if (salaryMin !== null && salaryMax !== null) {
     return `￥${salaryMin.toLocaleString()} - ￥${salaryMax.toLocaleString()}`;
   }
@@ -55,6 +55,9 @@ function formatSalaryRange(salaryMin: number | null, salaryMax: number | null) {
   }
   if (salaryMax !== null) {
     return `最高 ￥${salaryMax.toLocaleString()}`;
+  }
+  if (salaryText?.trim()) {
+    return salaryText.trim();
   }
   return '薪资未填写';
 }
@@ -807,7 +810,7 @@ export default function JobManagePage() {
                     </div>
 
                     <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-                      {formatSalaryRange(job.salaryMin, job.salaryMax)}
+                      {formatSalaryRange(job.salaryMin, job.salaryMax, job.salaryText)}
                     </p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -1202,7 +1205,7 @@ function JobDetailModal({
                   </div>
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-slate-400" />
-                    <span>{formatSalaryRange(job.salaryMin, job.salaryMax)}</span>
+                    <span>{formatSalaryRange(job.salaryMin, job.salaryMax, job.salaryText)}</span>
                   </div>
                 </div>
 
@@ -1341,7 +1344,7 @@ function JobDetailModal({
                   <DetailCard
                     icon={Sparkles}
                     label="薪资范围"
-                    value={formatSalaryRange(job.salaryMin, job.salaryMax)}
+                    value={formatSalaryRange(job.salaryMin, job.salaryMax, job.salaryText)}
                   />
                   <DetailCard
                     icon={CalendarDays}
@@ -1766,7 +1769,7 @@ function DeliveryPrepDialog({
                 {job.title}
               </h2>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                {job.company} · {job.location || '地点未填写'} · {formatSalaryRange(job.salaryMin, job.salaryMax)}
+                {job.company} · {job.location || '地点未填写'} · {formatSalaryRange(job.salaryMin, job.salaryMax, job.salaryText)}
               </p>
             </div>
 
