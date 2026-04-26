@@ -101,6 +101,16 @@ function extractCurrentPageJob() {
     return (value || '').replace(/\s+/g, ' ').trim();
   }
 
+  function cleanInjectedBlockText(value) {
+    return (value || '')
+      .replace(/\r/g, '\n')
+      .replace(/[ \t\f\v]+/g, ' ')
+      .replace(/\n[ \t]+/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   function getInjectedTextBySelectors(selectors) {
     for (const selector of selectors) {
       const element = document.querySelector(selector);
@@ -116,7 +126,7 @@ function extractCurrentPageJob() {
     let bestText = '';
     for (const selector of selectors) {
       document.querySelectorAll(selector).forEach((element) => {
-        const text = cleanInjectedText(element.innerText || element.textContent || '');
+        const text = cleanInjectedBlockText(element.innerText || element.textContent || '');
         if (text.length > bestText.length) {
           bestText = text;
         }
@@ -126,7 +136,7 @@ function extractCurrentPageJob() {
   }
 
   function formatInjectedJobDescription(value) {
-    let text = cleanInjectedText(value)
+    let text = cleanInjectedBlockText(value)
       .replace(/^微信扫码分享\s*举\s*报\s*/g, '')
       .replace(/^职位描述\s*校招\s*/g, '')
       .replace(/^职位描述\s*/g, '');
@@ -153,13 +163,15 @@ function extractCurrentPageJob() {
     text = text.replace(/\s*([一-龥]{2,4})\s*(校招顾问|招聘顾问|HR)\s*$/g, '');
 
     return text
-      .replace(/(职位描述[:：])\s*/g, '$1\n')
+      .replace(/[ \t]*(职位描述[:：])[ \t]*/g, '$1\n')
       .replace(/\s*(岗位职责[:：])\s*/g, '\n\n$1\n')
       .replace(/\s*(任职要求[:：])\s*/g, '\n\n$1\n')
       .replace(/\s*(岗位要求[:：])\s*/g, '\n\n$1\n')
       .replace(/\s*(职位要求[:：])\s*/g, '\n\n$1\n')
       .replace(/\s*(任职资格[:：])\s*/g, '\n\n$1\n')
+      .replace(/[ \t]*\*[ \t]*/g, '\n* ')
       .replace(/\s*([1-9][0-9]*[、.])\s*/g, '\n$1')
+      .replace(/\n[ \t]*\n[ \t]*(岗位职责[:：]|任职要求[:：]|岗位要求[:：]|职位要求[:：]|任职资格[:：])/g, '\n\n$1')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
@@ -272,7 +284,7 @@ function extractCurrentPageJob() {
     '[class*="job-sec"]',
     '[class*="description"]',
   ]);
-  const fallbackDescription = description || cleanInjectedText(document.body.innerText).slice(0, 4000);
+  const fallbackDescription = description || cleanInjectedBlockText(document.body.innerText).slice(0, 4000);
   const formattedDescription = formatInjectedJobDescription(fallbackDescription);
   const salary = parseInjectedSalaryText(salaryText);
 
