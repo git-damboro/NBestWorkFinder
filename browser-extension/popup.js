@@ -470,29 +470,57 @@ async function saveConfig() {
   setStatus('配置已保存。', 'success');
 }
 
-function readTokenFromFrontendStorage() {
+function readAuthSessionFromFrontendStorage() {
   const raw = localStorage.getItem('nbwf_auth_session');
   if (!raw) {
     return null;
   }
 
   try {
-    return JSON.parse(raw)?.accessToken || null;
+    const session = JSON.parse(raw);
+    return {
+      accessToken: session?.accessToken || null,
+      refreshToken: session?.refreshToken || null,
+      email: session?.email || null,
+    };
   } catch {
     return null;
   }
 }
 
-function isTokenUsable(token) {
+function parseJwtPayload(token) {
   try {
     const payload = token.split('.')[1];
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const data = JSON.parse(atob(padded));
-    return typeof data.exp === 'number' && data.exp * 1000 > Date.now() + 60_000;
+    return JSON.parse(atob(padded));
   } catch {
-    return false;
+    return null;
   }
+}
+
+function formatTokenStatus(token, email) {
+  const payload = parseJwtPayload(token);
+  const expiresAt = typeof payload?.exp === 'number'
+    ? new Date(payload.exp * 1000).toLocaleString('zh-CN', { hour12: false })
+    : '未知';
+  const account = email || payload?.email || payload?.sub || '未知账号';
+  return `已读取并保存最新 Token。账号：${account}，过期时间：${expiresAt}`;
+}
+
+async function refreshAccessToken(apiBase, refreshToken) {
+  if (!refreshToken) {
+    throw new Error('前端页面没有 refreshToken，请先在系统里重新登录');
+  }
+
+  const response = await fetch(`${apiBase.replace(/\/$/, '')}/api/auth/refresh?refreshToken=${encodeURIComponent(refreshToken)}`, {
+    method: 'POST',
+  });
+  const result = await parseApiResult(response);
+  if (!response.ok || result.code !== 200 || !result.data?.accessToken) {
+    throw new Error(result.message || `刷新 Token 失败，HTTP ${response.status}`);
+  }
+  return result.data;
 }
 
 function withTimeout(promise, timeoutMs, message) {
@@ -505,13 +533,9 @@ function withTimeout(promise, timeoutMs, message) {
 }
 
 async function loadTokenFromFrontend() {
+  const apiBase = apiBaseInput.value.trim() || DEFAULT_API_BASE;
   const frontendBase = (frontendBaseInput.value.trim() || DEFAULT_FRONTEND_BASE).replace(/\/$/, '');
   const frontendUrl = `${frontendBase}/*`;
-  const currentToken = accessTokenInput.value.trim();
-  if (currentToken && isTokenUsable(currentToken)) {
-    setStatus('当前 Token 仍有效，可以直接导入。', 'success');
-    return;
-  }
 
   setStatus('正在从已登录前端读取 Token...');
 
@@ -524,18 +548,22 @@ async function loadTokenFromFrontend() {
 
     const [result] = await withTimeout(chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: readTokenFromFrontendStorage,
+      func: readAuthSessionFromFrontendStorage,
     }), 3000, '读取 Token 超时，请刷新前端页面后重试');
-    const token = result?.result;
-    if (!token) {
+    const session = result?.result;
+    if (!session?.accessToken) {
       throw new Error('前端页面没有登录 Token，请先在系统里重新登录');
     }
 
+    const refreshedSession = await refreshAccessToken(apiBase, session.refreshToken);
+    const token = refreshedSession.accessToken || session.accessToken;
     accessTokenInput.value = token;
     await saveConfig();
-    setStatus('已读取并保存最新 Token。', 'success');
+    setStatus(formatTokenStatus(token, refreshedSession.email || session.email), 'success');
+    return token;
   } catch (error) {
     setStatus(error instanceof Error ? error.message : '读取 Token 失败', 'error');
+    return null;
   }
 }
 
@@ -558,7 +586,7 @@ async function parseApiResult(response) {
 async function importJob() {
   const apiBase = apiBaseInput.value.trim() || DEFAULT_API_BASE;
   const frontendBase = frontendBaseInput.value.trim() || DEFAULT_FRONTEND_BASE;
-  const accessToken = accessTokenInput.value.trim();
+  let accessToken = accessTokenInput.value.trim();
 
   if (!accessToken) {
     setStatus('请先填写登录 Token。', 'error');
@@ -584,14 +612,29 @@ async function importJob() {
     }
 
     setStatus('岗位信息已采集，正在导入系统...');
-    const response = await fetch(`${apiBase.replace(/\/$/, '')}/api/jobs/import`, {
+    const importUrl = `${apiBase.replace(/\/$/, '')}/api/jobs/import`;
+    const postImportJob = (token) => fetch(importUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(job),
     });
+
+    let response = await postImportJob(accessToken);
+    if (response.status === 401 || response.status === 403) {
+      setStatus('导入 Token 已失效，正在从前端 refreshToken 刷新后重试...');
+      const refreshedToken = await loadTokenFromFrontend();
+      if (!refreshedToken) {
+        throw new Error('刷新 Token 失败，请重新登录系统后再读取 Token');
+      }
+      accessToken = accessTokenInput.value.trim();
+      if (!accessToken) {
+        throw new Error('刷新 Token 失败，请重新登录系统后再读取 Token');
+      }
+      response = await postImportJob(accessToken);
+    }
 
     const result = await parseApiResult(response);
     if (!response.ok || result.code !== 200) {
