@@ -1408,22 +1408,22 @@ function buildBossOpenerDraft(
     : '后续我也可以补充发送简历，期待进一步交流。';
 
   const firstParagraph = normalizeOpenerText(
-    `看到${normalizedTitle}岗位后想和您沟通一下，岗位里${directionText}这些方向和我目前关注的求职方向比较接近。`,
+    `看到${normalizedTitle}岗位后想和您沟通一下，岗位需求的${directionText}这些技术栈与我的项目经历是匹配的。`,
   );
   const technicalText = resumeSignals.technicalKeywords.length > 0
-    ? `我之前的项目里接触过${resumeSignals.technicalKeywords.join('、')}等内容`
+    ? `我之前在项目里用过${resumeSignals.technicalKeywords.join('、')}等技术`
     : primaryExperience
-      ? `我之前做过和${shortenText(primaryExperience, 28)}相关的项目`
-      : '我目前主要在补充相关项目和技术能力';
+      ? `我之前做过${shortenText(primaryExperience, 28)}相关项目`
+      : '我目前主要在做岗位方向需要的项目和技术积累';
   const abilityText = resumeSignals.abilityKeywords.length > 0
-    ? `也比较重视${resumeSignals.abilityKeywords.join('、')}这类工程能力`
+    ? `也熟悉${resumeSignals.abilityKeywords.join('、')}这类工程开发能力`
     : secondaryExperience
-      ? `也有${shortenText(secondaryExperience, 24)}相关经历`
-      : '也希望结合岗位要求继续提升工程落地能力';
-  const experienceText = `${technicalText}，${abilityText}，整体方向和岗位要求比较匹配。`;
+      ? `也做过${shortenText(secondaryExperience, 24)}相关内容`
+      : '也熟悉后端开发、接口实现和工程落地这类工作';
+  const experienceText = `${technicalText}，${abilityText}，整体能力和岗位要求匹配。`;
   const secondParagraph = normalizeOpenerText(`${experienceText}${resumeClose}`);
 
-  return `  ${firstParagraph}\n  ${secondParagraph}`;
+  return normalizeOpenerText(`${firstParagraph}${secondParagraph}`);
 }
 
 function DeliveryPrepDialog({
