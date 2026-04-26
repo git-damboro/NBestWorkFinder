@@ -84,7 +84,16 @@ function extractTechTags(text) {
     '前端',
     '全栈',
     'PostgreSQL',
+    'MySQL',
+    'MongoDB',
     'Redis',
+    'Linux',
+    'Docker',
+    'FastAPI',
+    'Next.js',
+    'React',
+    'tRPC',
+    'LangChain',
     'AI应用',
     '工程化',
   ];
@@ -199,15 +208,24 @@ function extractCurrentPageJob() {
 
   function formatInjectedJobDescription(value) {
     let text = cleanInjectedBlockText(value)
-      .replace(/^微信扫码分享\s*举\s*报\s*/g, '')
+      .replace(/^(微信扫码分享|举报|举\s*报)\s*/g, '')
+      .replace(/^(微信扫码分享|举报|举\s*报)\s*/gm, '')
       .replace(/^职位描述\s*校招\s*/g, '')
       .replace(/^职位描述\s*/g, '');
 
     const stopWords = [
+      '【关于公司',
+      '【为什么选择',
       '竞争力分析',
       '查看完整个人竞争力',
       'BOSS 安全提示',
       'BOSS直聘严禁',
+      '去App',
+      '与BOSS随时沟通',
+      '前往App',
+      '工作地址',
+      '点击查看地图',
+      '查看更多信息',
       '杭州 搜索',
       '城市招聘',
       '热门职位',
@@ -222,18 +240,21 @@ function extractCurrentPageJob() {
       }
     }
 
-    text = text.replace(/\s*([一-龥]{2,4})\s*(校招顾问|招聘顾问|HR)\s*$/g, '');
+    text = text
+      .replace(/\s*([一-龥]{2,4})\s*(女士|先生)\s*(刚刚活跃|今日活跃|本周活跃|在线|昨天活跃)?[\s\S]*$/g, '')
+      .replace(/\s*([一-龥]{2,4})\s*(校招顾问|招聘顾问|人事招聘专员|HR)\s*$/g, '');
 
     return text
-      .replace(/[ \t]*(职位描述[:：])[ \t]*/g, '$1\n')
-      .replace(/\s*(岗位职责[:：])\s*/g, '\n\n$1\n')
-      .replace(/\s*(任职要求[:：])\s*/g, '\n\n$1\n')
-      .replace(/\s*(岗位要求[:：])\s*/g, '\n\n$1\n')
-      .replace(/\s*(职位要求[:：])\s*/g, '\n\n$1\n')
-      .replace(/\s*(任职资格[:：])\s*/g, '\n\n$1\n')
+      .replace(/[ \t]*(【?职位描述】?[:：])[ \t]*/g, '$1\n')
+      .replace(/\s*(【?岗位职责】?[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(【?任职要求】?[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(【?岗位要求】?[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(【?职位要求】?[:：])\s*/g, '\n\n$1\n')
+      .replace(/\s*(【?任职资格】?[:：])\s*/g, '\n\n$1\n')
       .replace(/[ \t]*\*[ \t]*/g, '\n* ')
+      .replace(/[ \t]*-[ \t]*/g, '\n- ')
       .replace(/\s*([1-9][0-9]*[、.])\s*/g, '\n$1')
-      .replace(/\n[ \t]*\n[ \t]*(岗位职责[:：]|任职要求[:：]|岗位要求[:：]|职位要求[:：]|任职资格[:：])/g, '\n\n$1')
+      .replace(/\n[ \t]*\n[ \t]*(【?岗位职责】?[:：]|【?任职要求】?[:：]|【?岗位要求】?[:：]|【?职位要求】?[:：]|【?任职资格】?[:：])/g, '\n\n$1')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
@@ -280,7 +301,16 @@ function extractCurrentPageJob() {
       '前端',
       '全栈',
       'PostgreSQL',
+      'MySQL',
+      'MongoDB',
       'Redis',
+      'Linux',
+      'Docker',
+      'FastAPI',
+      'Next.js',
+      'React',
+      'tRPC',
+      'LangChain',
       'AI应用',
       '工程化',
       '算法',
