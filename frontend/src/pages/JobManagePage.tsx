@@ -175,6 +175,9 @@ export default function JobManagePage() {
   const [followUpError, setFollowUpError] = useState<string | null>(null);
   const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [appliedDialogOpen, setAppliedDialogOpen] = useState(false);
+  const [appliedNote, setAppliedNote] = useState('已发送开场白，等待 HR 回复。');
+  const [savingApplied, setSavingApplied] = useState(false);
   const [deliveryPrepOpen, setDeliveryPrepOpen] = useState(false);
   const [deliveryExperiences, setDeliveryExperiences] = useState<UserExperience[]>([]);
   const [loadingDeliveryExperiences, setLoadingDeliveryExperiences] = useState(false);
@@ -527,6 +530,68 @@ export default function JobManagePage() {
     }
   };
 
+  const refreshSelectedJobProgress = async (jobId: number) => {
+    await loadJobDetail(jobId);
+    await loadFollowUps(jobId);
+    await loadJobs(jobId);
+  };
+
+  const handleRecordOpenerCopied = async (draft: string, resume: ResumeListItem | null) => {
+    if (!selectedJob) {
+      return;
+    }
+
+    await jobFollowUpApi.create(selectedJob.id, {
+      type: 'CONTACT',
+      title: '已复制 Boss 开场白',
+      content: [
+        '已复制开场白，准备前往 BOSS 发送。',
+        resume ? `使用简历：${resume.filename}` : '当前未选择简历。',
+        '',
+        draft,
+      ].join('\n'),
+      contactMethod: 'BOSS',
+    });
+    await refreshSelectedJobProgress(selectedJob.id);
+  };
+
+  const openAppliedConfirmDialog = () => {
+    if (!selectedJob) {
+      return;
+    }
+
+    setActionError(null);
+    setAppliedNote('已发送开场白，等待 HR 回复。');
+    setAppliedDialogOpen(true);
+  };
+
+  const handleConfirmApplied = async () => {
+    if (!selectedJob) {
+      return;
+    }
+
+    setSavingApplied(true);
+    setActionError(null);
+
+    try {
+      if (selectedJob.applicationStatus !== 'APPLIED') {
+        await jobApi.updateJob(selectedJob.id, { applicationStatus: 'APPLIED' });
+      }
+      await jobFollowUpApi.create(selectedJob.id, {
+        type: 'CONTACT',
+        title: '已发送开场白',
+        content: appliedNote.trim() || '已发送开场白，等待 HR 回复。',
+        contactMethod: 'BOSS',
+      });
+      setAppliedDialogOpen(false);
+      await refreshSelectedJobProgress(selectedJob.id);
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSavingApplied(false);
+    }
+  };
+
   const updateSelectedJobStatus = async (status: JobApplicationStatus) => {
     if (!selectedJob || selectedJob.applicationStatus === status) {
       return;
@@ -536,9 +601,7 @@ export default function JobManagePage() {
 
     try {
       await jobApi.updateJob(selectedJob.id, { applicationStatus: status });
-      await loadJobDetail(selectedJob.id);
-      await loadFollowUps(selectedJob.id);
-      await loadJobs(selectedJob.id);
+      await refreshSelectedJobProgress(selectedJob.id);
     } catch (error) {
       setActionError(getErrorMessage(error));
     }
@@ -795,7 +858,13 @@ export default function JobManagePage() {
           setDetailModalOpen(false);
           openDeliveryPrepDialog();
         }}
-        onChangeStatus={(status) => void updateSelectedJobStatus(status)}
+        onChangeStatus={(status) => {
+          if (status === 'APPLIED') {
+            openAppliedConfirmDialog();
+            return;
+          }
+          void updateSelectedJobStatus(status);
+        }}
         onEdit={() => {
           setDetailModalOpen(false);
           openEditDialog();
@@ -855,6 +924,9 @@ export default function JobManagePage() {
         loadingResumes={loadingDeliveryResumes}
         error={deliveryPrepError}
         resumeError={deliveryResumeError}
+        followUps={followUps}
+        loadingFollowUps={loadingFollowUps}
+        followUpError={followUpError}
         onClose={() => setDeliveryPrepOpen(false)}
         onRetry={() => void loadDeliveryExperiences()}
         onRetryResumes={() => void loadDeliveryResumes()}
@@ -862,11 +934,37 @@ export default function JobManagePage() {
           setDeliveryPrepOpen(false);
           navigate('/profile/experiences');
         }}
+        onCopyDraft={(draft, resume) => handleRecordOpenerCopied(draft, resume)}
         onMatch={() => {
           setDeliveryPrepOpen(false);
           setMatchOpen(true);
         }}
-        onMarkApplied={() => void updateSelectedJobStatus('APPLIED')}
+        onMarkApplied={openAppliedConfirmDialog}
+      />
+
+      <ConfirmDialog
+        open={appliedDialogOpen}
+        title="标记已投递"
+        message="确认已经在 BOSS 等渠道发送开场白后，会把职位状态更新为已投递，并写入一条跟进记录。"
+        confirmText="保存并标记已投递"
+        cancelText="取消"
+        loading={savingApplied}
+        onConfirm={() => void handleConfirmApplied()}
+        onCancel={() => setAppliedDialogOpen(false)}
+        customContent={
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              投递备注
+            </label>
+            <textarea
+              value={appliedNote}
+              onChange={(event) => setAppliedNote(event.target.value)}
+              className="min-h-28 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              placeholder="例如：已发送开场白，等待 HR 回复。"
+              maxLength={12000}
+            />
+          </div>
+        }
       />
 
       <ConfirmDialog
@@ -1306,10 +1404,14 @@ interface DeliveryPrepDialogProps {
   loadingResumes: boolean;
   error: string | null;
   resumeError: string | null;
+  followUps: JobFollowUpRecord[];
+  loadingFollowUps: boolean;
+  followUpError: string | null;
   onClose: () => void;
   onRetry: () => void;
   onRetryResumes: () => void;
   onOpenExperiences: () => void;
+  onCopyDraft: (draft: string, resume: ResumeListItem | null) => Promise<void>;
   onMatch: () => void;
   onMarkApplied: () => void;
 }
@@ -1469,10 +1571,14 @@ function DeliveryPrepDialog({
   loadingResumes,
   error,
   resumeError,
+  followUps,
+  loadingFollowUps,
+  followUpError,
   onClose,
   onRetry,
   onRetryResumes,
   onOpenExperiences,
+  onCopyDraft,
   onMatch,
   onMarkApplied,
 }: DeliveryPrepDialogProps) {
@@ -1588,11 +1694,17 @@ function DeliveryPrepDialog({
       await navigator.clipboard.writeText(openerDraft);
       setCopied(true);
       setCopyError(null);
+      try {
+        await onCopyDraft(openerDraft, selectedResume);
+      } catch (recordError) {
+        setCopyError(`已复制，但操作记录保存失败：${getErrorMessage(recordError)}`);
+      }
     } catch {
       setCopied(false);
       setCopyError('复制失败，请手动选中文案复制。');
     }
   };
+  const latestFollowUp = followUps[0] ?? null;
 
   return (
     <div className="fixed inset-0 z-[60]">
@@ -1849,6 +1961,11 @@ function DeliveryPrepDialog({
               <aside className="space-y-4">
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 dark:border-emerald-800/60 dark:bg-emerald-900/10">
                   <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">下一步操作</h3>
+                  {copied && (
+                    <p className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-emerald-700 dark:bg-slate-900/40 dark:text-emerald-200">
+                      已复制开场白。发送给 HR 后，点击“标记已投递”记录本次投递。
+                    </p>
+                  )}
                   <div className="mt-4 grid gap-3">
                     <button
                       type="button"
@@ -1876,12 +1993,43 @@ function DeliveryPrepDialog({
                 </div>
 
                 <div className="rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
-                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">第一版范围</h3>
-                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    <li>· 汇总职位和已启用经历素材。</li>
-                    <li>· 检查 JD、标签、个人素材是否准备好。</li>
-                    <li>· 暂不自动生成 Boss 开场白，下一步再接 AI。</li>
-                  </ul>
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">最近投递记录</h3>
+                  {loadingFollowUps && (
+                    <p className="mt-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      正在读取跟进记录...
+                    </p>
+                  )}
+                  {!loadingFollowUps && followUpError && (
+                    <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-200">
+                      {followUpError}
+                    </p>
+                  )}
+                  {!loadingFollowUps && !followUpError && latestFollowUp && (
+                    <div className="mt-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-200">
+                          {jobFollowUpTypeLabelMap[latestFollowUp.type]}
+                        </span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">
+                          {formatDateTime(latestFollowUp.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+                        {latestFollowUp.title}
+                      </p>
+                      {latestFollowUp.content && (
+                        <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-500 dark:text-slate-300">
+                          {latestFollowUp.content}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {!loadingFollowUps && !followUpError && !latestFollowUp && (
+                    <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                      还没有投递记录。复制开场白、标记已投递或添加跟进后会显示在这里。
+                    </p>
+                  )}
                 </div>
               </aside>
             </div>
