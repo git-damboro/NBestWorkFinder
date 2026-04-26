@@ -325,6 +325,19 @@ async function saveConfig() {
   setStatus('配置已保存。', 'success');
 }
 
+async function parseApiResult(response) {
+  const rawText = await response.text();
+  if (!rawText.trim()) {
+    throw new Error(`导入接口返回空响应，HTTP ${response.status}。请确认后端服务正常，且登录 Token 没有过期。`);
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    throw new Error(`导入接口返回的不是 JSON，HTTP ${response.status}：${rawText.slice(0, 160)}`);
+  }
+}
+
 async function importJob() {
   const apiBase = apiBaseInput.value.trim() || DEFAULT_API_BASE;
   const frontendBase = frontendBaseInput.value.trim() || DEFAULT_FRONTEND_BASE;
@@ -358,9 +371,9 @@ async function importJob() {
       body: JSON.stringify(job),
     });
 
-    const result = await response.json();
+    const result = await parseApiResult(response);
     if (!response.ok || result.code !== 200) {
-      throw new Error(result.message || '导入失败');
+      throw new Error(result.message || `导入失败，HTTP ${response.status}`);
     }
 
     const importedJob = result.data;
