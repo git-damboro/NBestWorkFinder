@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Copy,
   Edit3,
+  ExternalLink,
   FileText,
   Loader2,
   MapPin,
@@ -1718,6 +1719,7 @@ function DeliveryPrepDialog({
     || job.applicationStatus === 'OFFERED'
     || job.applicationStatus === 'REJECTED';
   const readyCount = [hasFullJd, hasTechTags, hasSelectedResume].filter(Boolean).length;
+  const sourceUrl = job.sourceUrl?.trim() || '';
 
   const checks = [
     {
@@ -2017,11 +2019,41 @@ function DeliveryPrepDialog({
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 dark:border-emerald-800/60 dark:bg-emerald-900/10">
                   <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">下一步操作</h3>
                   {copied && (
-                    <p className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-emerald-700 dark:bg-slate-900/40 dark:text-emerald-200">
-                      已复制开场白。发送给 HR 后，点击“标记已投递”记录本次投递。
-                    </p>
+                    <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs leading-5 text-emerald-700 dark:bg-slate-900/40 dark:text-emerald-200">
+                      <p>已复制开场白。现在回到原岗位页发送给 HR，发送后回这里标记已投递。</p>
+                      {sourceUrl && (
+                        <a
+                          href={sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex items-center gap-1 font-semibold text-emerald-800 underline-offset-4 hover:underline dark:text-emerald-100"
+                        >
+                          打开原始岗位页
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
                   )}
                   <div className="mt-4 grid gap-3">
+                    {sourceUrl && (
+                      <a
+                        href={sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        打开原岗位发送
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={onMarkApplied}
+                      disabled={alreadyApplied}
+                      className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {alreadyApplied ? '已进入投递流程' : '已发送，标记已投递'}
+                    </button>
                     <button
                       type="button"
                       onClick={onMatch}
@@ -2035,14 +2067,6 @@ function DeliveryPrepDialog({
                       className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                     >
                       维护我的经历
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onMarkApplied}
-                      disabled={alreadyApplied}
-                      className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {alreadyApplied ? '已进入投递流程' : '标记已投递'}
                     </button>
                   </div>
                 </div>
