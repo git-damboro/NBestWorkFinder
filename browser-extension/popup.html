@@ -138,6 +138,56 @@
         color: #b91c1c;
         background: #fef2f2;
       }
+
+      .preview {
+        display: none;
+        margin-top: 12px;
+        border: 1px solid #bbf7d0;
+        border-radius: 16px;
+        padding: 12px;
+        background: #f0fdf4;
+      }
+
+      .preview.visible {
+        display: block;
+      }
+
+      .preview h2 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .preview dl {
+        margin: 10px 0 0;
+      }
+
+      .preview dt {
+        margin-top: 8px;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .preview dd {
+        margin: 3px 0 0;
+        color: #0f172a;
+        font-size: 13px;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+
+      .preview-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .preview-actions button {
+        margin-top: 0;
+        padding: 9px 10px;
+        font-size: 13px;
+      }
     </style>
   </head>
   <body>
@@ -147,6 +197,26 @@
     <div class="card">
       <button id="importJob">采集岗位并准备投递</button>
       <button id="openApp" class="secondary">打开职位工作台</button>
+
+      <div id="jobPreview" class="preview" aria-live="polite">
+        <h2>确认导入信息</h2>
+        <dl>
+          <dt>职位</dt>
+          <dd id="previewTitle">-</dd>
+          <dt>公司</dt>
+          <dd id="previewCompany">-</dd>
+          <dt>薪资</dt>
+          <dd id="previewSalary">-</dd>
+          <dt>描述</dt>
+          <dd id="previewDescription">-</dd>
+          <dt>标签</dt>
+          <dd id="previewTags">-</dd>
+        </dl>
+        <div class="preview-actions">
+          <button id="confirmImport">确认导入</button>
+          <button id="cancelPreview" class="secondary">取消预览</button>
+        </div>
+      </div>
 
       <details>
         <summary>设置与登录态</summary>

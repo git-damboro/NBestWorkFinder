@@ -9,10 +9,39 @@ const saveConfigButton = document.getElementById('saveConfig');
 const importJobButton = document.getElementById('importJob');
 const openAppButton = document.getElementById('openApp');
 const statusBox = document.getElementById('status');
+const jobPreviewBox = document.getElementById('jobPreview');
+const previewTitle = document.getElementById('previewTitle');
+const previewCompany = document.getElementById('previewCompany');
+const previewSalary = document.getElementById('previewSalary');
+const previewDescription = document.getElementById('previewDescription');
+const previewTags = document.getElementById('previewTags');
+const confirmImportButton = document.getElementById('confirmImport');
+const cancelPreviewButton = document.getElementById('cancelPreview');
+
+let pendingJob = null;
 
 function setStatus(message, type = '') {
   statusBox.textContent = message;
   statusBox.className = `status ${type}`.trim();
+}
+
+function hideJobPreview() {
+  pendingJob = null;
+  jobPreviewBox.classList.remove('visible');
+}
+
+function showJobPreview(job) {
+  pendingJob = job;
+  previewTitle.textContent = job.title || '未识别';
+  previewCompany.textContent = job.company || '未识别';
+  previewSalary.textContent = job.salaryText || '未识别';
+  previewDescription.textContent = job.description
+    ? `${job.description.length} 字，${job.description.split('\n').filter(Boolean).length} 行`
+    : '未识别';
+  previewTags.textContent = Array.isArray(job.techTags) && job.techTags.length > 0
+    ? job.techTags.join('、')
+    : '未识别';
+  jobPreviewBox.classList.add('visible');
 }
 
 function cleanText(value) {
@@ -647,16 +676,8 @@ async function parseApiResult(response) {
   }
 }
 
-async function importJob() {
-  const apiBase = apiBaseInput.value.trim() || DEFAULT_API_BASE;
-  const frontendBase = frontendBaseInput.value.trim() || DEFAULT_FRONTEND_BASE;
-  let accessToken = accessTokenInput.value.trim();
-
-  if (!accessToken) {
-    setStatus('请先填写登录 Token。', 'error');
-    return;
-  }
-
+async function collectJobForPreview() {
+  hideJobPreview();
   importJobButton.disabled = true;
   setStatus('正在采集当前页面...');
 
@@ -675,7 +696,35 @@ async function importJob() {
       throw new Error(`未识别到完整岗位信息，缺少：${missingFields}。请确认右侧详情已加载完成后再导入`);
     }
 
-    setStatus('岗位信息已采集，正在导入系统...');
+    showJobPreview(job);
+    setStatus('岗位信息已采集，请确认后导入。', 'success');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : '采集失败', 'error');
+  } finally {
+    importJobButton.disabled = false;
+  }
+}
+
+async function confirmImportJob() {
+  const apiBase = apiBaseInput.value.trim() || DEFAULT_API_BASE;
+  const frontendBase = frontendBaseInput.value.trim() || DEFAULT_FRONTEND_BASE;
+  let accessToken = accessTokenInput.value.trim();
+  const job = pendingJob;
+
+  if (!accessToken) {
+    setStatus('请先填写登录 Token。', 'error');
+    return;
+  }
+  if (!job) {
+    setStatus('请先采集岗位信息。', 'error');
+    return;
+  }
+
+  confirmImportButton.disabled = true;
+  setStatus('正在导入系统...');
+
+  try {
+    await saveConfig();
     const importUrl = `${apiBase.replace(/\/$/, '')}/api/jobs/import`;
     const postImportJob = (token) => fetch(importUrl, {
       method: 'POST',
@@ -707,13 +756,14 @@ async function importJob() {
 
     const importedJob = result.data;
     setStatus(`导入成功：${importedJob.title} · ${importedJob.company}`, 'success');
+    hideJobPreview();
     await chrome.tabs.create({
       url: `${frontendBase.replace(/\/$/, '')}/jobs?selectedJobId=${importedJob.id}&deliveryPrep=1`,
     });
   } catch (error) {
     setStatus(error instanceof Error ? error.message : '导入失败', 'error');
   } finally {
-    importJobButton.disabled = false;
+    confirmImportButton.disabled = false;
   }
 }
 
@@ -724,7 +774,9 @@ async function openApp() {
 
 saveConfigButton.addEventListener('click', () => void saveConfig());
 loadTokenButton.addEventListener('click', () => void loadTokenFromFrontend());
-importJobButton.addEventListener('click', () => void importJob());
+importJobButton.addEventListener('click', () => void collectJobForPreview());
+confirmImportButton.addEventListener('click', () => void confirmImportJob());
+cancelPreviewButton.addEventListener('click', hideJobPreview);
 openAppButton.addEventListener('click', () => void openApp());
 
 void loadConfig();
