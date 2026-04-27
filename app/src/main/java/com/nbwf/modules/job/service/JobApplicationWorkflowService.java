@@ -88,6 +88,24 @@ public class JobApplicationWorkflowService {
     }
 
     @Transactional
+    public void recordJobStructured(JobEntity job, String outputSnapshot) {
+        JobApplicationWorkflowEntity workflow = getOrCreateWorkflow(job);
+        recordEvent(
+            workflow,
+            JobApplicationWorkflowNode.JOB_STRUCTURED,
+            JobApplicationWorkflowEventType.NODE_COMPLETED,
+            JobApplicationWorkflowStatus.WAITING_HUMAN,
+            "岗位结构化分析完成",
+            "已提取岗位方向、核心技能、加分项、风险点和开场白重点。",
+            buildJobSnapshot(job),
+            outputSnapshot,
+            null,
+            true,
+            "选择简历和经历，生成个性化开场白"
+        );
+    }
+
+    @Transactional
     public void recordFollowUpScheduled(JobEntity job, LocalDateTime nextFollowUpAt) {
         if (nextFollowUpAt == null) {
             return;
@@ -164,7 +182,7 @@ public class JobApplicationWorkflowService {
 
     private JobApplicationWorkflowEventType resolveEventType(JobApplicationWorkflowNode node) {
         return switch (node) {
-            case OPENER_COPIED, APPLICATION_SENT, JOB_IMPORTED, OPENER_GENERATED -> JobApplicationWorkflowEventType.NODE_COMPLETED;
+            case OPENER_COPIED, APPLICATION_SENT, JOB_IMPORTED, JOB_STRUCTURED, OPENER_GENERATED -> JobApplicationWorkflowEventType.NODE_COMPLETED;
             case FOLLOW_UP_SCHEDULED -> JobApplicationWorkflowEventType.WAITING_HUMAN;
             case WORKFLOW_CLOSED -> JobApplicationWorkflowEventType.WORKFLOW_CLOSED;
         };
@@ -186,6 +204,7 @@ public class JobApplicationWorkflowService {
         }
         return switch (node) {
             case JOB_IMPORTED -> "岗位已导入";
+            case JOB_STRUCTURED -> "岗位结构化分析完成";
             case OPENER_GENERATED -> "开场白已生成";
             case OPENER_COPIED -> "开场白已复制";
             case APPLICATION_SENT -> "用户已确认投递";
@@ -196,7 +215,9 @@ public class JobApplicationWorkflowService {
 
     private String resolveNextAction(JobApplicationWorkflowNode node) {
         return switch (node) {
-            case JOB_IMPORTED, OPENER_GENERATED -> "确认开场白内容并复制发送";
+            case JOB_IMPORTED -> "执行岗位结构化分析，提取投递准备信息";
+            case JOB_STRUCTURED -> "选择简历和经历，生成个性化开场白";
+            case OPENER_GENERATED -> "确认开场白内容并复制发送";
             case OPENER_COPIED -> "回到原岗位页发送给 HR，发送后标记已投递";
             case APPLICATION_SENT -> "等待 HR 回复，必要时设置下一次跟进";
             case FOLLOW_UP_SCHEDULED -> "按计划跟进 HR 反馈";

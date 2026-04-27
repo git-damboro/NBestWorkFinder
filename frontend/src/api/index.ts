@@ -10,5 +10,6 @@ export { jobApi } from './jobs';
 export { jobDraftApi } from './jobDrafts';
 export { jobFollowUpApi } from './jobFollowUps';
 export { jobWorkflowApi } from './jobWorkflows';
+export { jobStructuredAnalysisApi } from './jobStructuredAnalyses';
 export { aiGenerationTaskApi } from './aiGenerationTasks';
 export { userExperienceApi } from './userExperiences';

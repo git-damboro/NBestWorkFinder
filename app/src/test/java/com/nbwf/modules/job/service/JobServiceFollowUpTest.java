@@ -54,6 +54,12 @@ class JobServiceFollowUpTest {
     @Mock
     private JobFollowUpService jobFollowUpService;
 
+    @Mock
+    private JobApplicationWorkflowService workflowService;
+
+    @Mock
+    private JobStructuredAnalysisService structuredAnalysisService;
+
     @InjectMocks
     private JobService jobService;
 

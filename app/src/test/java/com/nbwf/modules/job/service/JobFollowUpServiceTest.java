@@ -33,6 +33,9 @@ class JobFollowUpServiceTest {
     @Mock
     private JobFollowUpRecordRepository recordRepository;
 
+    @Mock
+    private JobApplicationWorkflowService workflowService;
+
     @InjectMocks
     private JobFollowUpService service;
 

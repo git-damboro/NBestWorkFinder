@@ -6,6 +6,7 @@ import com.nbwf.modules.job.model.*;
 import com.nbwf.modules.job.service.JobFollowUpService;
 import com.nbwf.modules.job.service.JobApplicationWorkflowService;
 import com.nbwf.modules.job.service.JobService;
+import com.nbwf.modules.job.service.JobStructuredAnalysisService;
 import com.nbwf.modules.jobdraft.model.JobDraftBatchCreatedDTO;
 import com.nbwf.modules.jobdraft.service.JobDraftService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,6 +28,7 @@ public class JobController {
     private final JobDraftService jobDraftService;
     private final JobFollowUpService jobFollowUpService;
     private final JobApplicationWorkflowService workflowService;
+    private final JobStructuredAnalysisService structuredAnalysisService;
 
     @Operation(summary = "录入职位（粘贴 JD）")
     @PostMapping
@@ -116,6 +118,20 @@ public class JobController {
                                                                      @Valid @RequestBody CreateWorkflowEventRequest req,
                                                                      @AuthenticationPrincipal Long userId) {
         return Result.success(workflowService.createManualEvent(id, userId, req));
+    }
+
+    @Operation(summary = "查询岗位结构化 Agent 分析结果")
+    @GetMapping("/{id}/structured-analysis")
+    public Result<JobStructuredAnalysisDTO> getStructuredAnalysis(@PathVariable Long id,
+                                                                 @AuthenticationPrincipal Long userId) {
+        return Result.success(structuredAnalysisService.getLatest(id, userId));
+    }
+
+    @Operation(summary = "执行岗位结构化 Agent 分析")
+    @PostMapping("/{id}/structured-analysis")
+    public Result<JobStructuredAnalysisDTO> analyzeStructuredJob(@PathVariable Long id,
+                                                                @AuthenticationPrincipal Long userId) {
+        return Result.success(structuredAnalysisService.analyze(id, userId));
     }
 
     @Operation(summary = "根据简历生成职位草稿")

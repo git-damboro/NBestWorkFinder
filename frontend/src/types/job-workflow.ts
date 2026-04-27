@@ -7,6 +7,7 @@ export type JobApplicationWorkflowStatus =
 
 export type JobApplicationWorkflowNode =
   | 'JOB_IMPORTED'
+  | 'JOB_STRUCTURED'
   | 'OPENER_GENERATED'
   | 'OPENER_COPIED'
   | 'APPLICATION_SENT'
@@ -58,6 +59,7 @@ export interface CreateWorkflowEventForm {
 
 export const workflowNodeLabelMap: Record<JobApplicationWorkflowNode, string> = {
   JOB_IMPORTED: '岗位导入',
+  JOB_STRUCTURED: '岗位结构化',
   OPENER_GENERATED: '开场白生成',
   OPENER_COPIED: '开场白复制',
   APPLICATION_SENT: '确认投递',

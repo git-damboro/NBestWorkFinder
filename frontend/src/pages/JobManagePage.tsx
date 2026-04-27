@@ -23,7 +23,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { jobApi, jobFollowUpApi, jobWorkflowApi, userExperienceApi } from '../api';
+import { jobApi, jobFollowUpApi, jobStructuredAnalysisApi, jobWorkflowApi, userExperienceApi } from '../api';
 import { historyApi, type ResumeDetail, type ResumeListItem } from '../api/history';
 import { getErrorMessage } from '../api/request';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -35,6 +35,7 @@ import type { CreateJobFollowUpForm, JobFollowUpRecord } from '../types/job-foll
 import { jobFollowUpTypeLabelMap } from '../types/job-follow-up';
 import type { JobApplicationWorkflow } from '../types/job-workflow';
 import { workflowNodeLabelMap, workflowStatusLabelMap } from '../types/job-workflow';
+import type { JobStructuredAnalysis } from '../types/job-structured-analysis';
 import type { InterviewJobTarget } from '../types/interview';
 import type { CreateJobForm, JobApplicationStatus, JobDetail, JobListItem, UpdateJobForm } from '../types/job';
 import { jobStatusLabelMap, jobStatusOptions } from '../types/job';
@@ -246,6 +247,10 @@ export default function JobManagePage() {
   const [workflow, setWorkflow] = useState<JobApplicationWorkflow | null>(null);
   const [loadingWorkflow, setLoadingWorkflow] = useState(false);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [structuredAnalysis, setStructuredAnalysis] = useState<JobStructuredAnalysis | null>(null);
+  const [loadingStructuredAnalysis, setLoadingStructuredAnalysis] = useState(false);
+  const [analyzingStructuredAnalysis, setAnalyzingStructuredAnalysis] = useState(false);
+  const [structuredAnalysisError, setStructuredAnalysisError] = useState<string | null>(null);
   const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [appliedDialogOpen, setAppliedDialogOpen] = useState(false);
@@ -321,6 +326,21 @@ export default function JobManagePage() {
     }
   }, []);
 
+  const loadStructuredAnalysis = useCallback(async (jobId: number) => {
+    setLoadingStructuredAnalysis(true);
+    setStructuredAnalysisError(null);
+
+    try {
+      const data = await jobStructuredAnalysisApi.get(jobId);
+      setStructuredAnalysis(data);
+    } catch (error) {
+      setStructuredAnalysis(null);
+      setStructuredAnalysisError(getErrorMessage(error));
+    } finally {
+      setLoadingStructuredAnalysis(false);
+    }
+  }, []);
+
   const loadDeliveryExperiences = useCallback(async () => {
     setLoadingDeliveryExperiences(true);
     setDeliveryPrepError(null);
@@ -364,6 +384,7 @@ export default function JobManagePage() {
       setSelectedJob(data);
       void loadFollowUps(jobId);
       void loadWorkflow(jobId);
+      void loadStructuredAnalysis(jobId);
     } catch (error) {
       if (detailRequestIdRef.current !== requestId) {
         return;
@@ -371,13 +392,14 @@ export default function JobManagePage() {
       setSelectedJob(null);
       setFollowUps([]);
       setWorkflow(null);
+      setStructuredAnalysis(null);
       setDetailError(getErrorMessage(error));
     } finally {
       if (detailRequestIdRef.current === requestId) {
         setLoadingDetail(false);
       }
     }
-  }, [loadFollowUps, loadWorkflow]);
+  }, [loadFollowUps, loadStructuredAnalysis, loadWorkflow]);
 
   const loadJobs = useCallback(
     async (preferredId?: number | null) => {
@@ -393,6 +415,7 @@ export default function JobManagePage() {
           setSelectedJob(null);
           setFollowUps([]);
           setWorkflow(null);
+          setStructuredAnalysis(null);
           setDetailError(null);
           return;
         }
@@ -409,6 +432,7 @@ export default function JobManagePage() {
         setSelectedJob(null);
         setFollowUps([]);
         setWorkflow(null);
+        setStructuredAnalysis(null);
       } finally {
         setLoadingList(false);
       }
@@ -425,12 +449,31 @@ export default function JobManagePage() {
       setSelectedJob(null);
       setFollowUps([]);
       setWorkflow(null);
+      setStructuredAnalysis(null);
       setDetailError(null);
       return;
     }
 
     void loadJobDetail(selectedJobId);
   }, [selectedJobId, loadJobDetail]);
+
+  const handleAnalyzeStructuredJob = useCallback(async () => {
+    if (!selectedJob) {
+      return;
+    }
+
+    setAnalyzingStructuredAnalysis(true);
+    setStructuredAnalysisError(null);
+    try {
+      const data = await jobStructuredAnalysisApi.analyze(selectedJob.id);
+      setStructuredAnalysis(data);
+      await loadWorkflow(selectedJob.id);
+    } catch (error) {
+      setStructuredAnalysisError(getErrorMessage(error));
+    } finally {
+      setAnalyzingStructuredAnalysis(false);
+    }
+  }, [loadWorkflow, selectedJob]);
 
   useEffect(() => {
     if (!interviewOpen) {
@@ -1032,6 +1075,10 @@ export default function JobManagePage() {
         workflow={workflow}
         loadingWorkflow={loadingWorkflow}
         workflowError={workflowError}
+        structuredAnalysis={structuredAnalysis}
+        loadingStructuredAnalysis={loadingStructuredAnalysis}
+        analyzingStructuredAnalysis={analyzingStructuredAnalysis}
+        structuredAnalysisError={structuredAnalysisError}
         onClose={() => setDetailModalOpen(false)}
         onRetry={() => {
           if (selectedJobId !== null) {
@@ -1048,6 +1095,7 @@ export default function JobManagePage() {
             void loadWorkflow(selectedJobId);
           }
         }}
+        onAnalyzeStructuredJob={() => void handleAnalyzeStructuredJob()}
         onAddFollowUp={() => setFollowUpDialogOpen(true)}
         onPrepareDelivery={() => {
           setDetailModalOpen(false);
@@ -1273,10 +1321,15 @@ interface JobDetailModalProps {
   workflow: JobApplicationWorkflow | null;
   loadingWorkflow: boolean;
   workflowError: string | null;
+  structuredAnalysis: JobStructuredAnalysis | null;
+  loadingStructuredAnalysis: boolean;
+  analyzingStructuredAnalysis: boolean;
+  structuredAnalysisError: string | null;
   onClose: () => void;
   onRetry: () => void;
   onRetryFollowUps: () => void;
   onRetryWorkflow: () => void;
+  onAnalyzeStructuredJob: () => void;
   onAddFollowUp: () => void;
   onPrepareDelivery: () => void;
   onChangeStatus: (status: JobApplicationStatus) => void;
@@ -1297,10 +1350,15 @@ function JobDetailModal({
   workflow,
   loadingWorkflow,
   workflowError,
+  structuredAnalysis,
+  loadingStructuredAnalysis,
+  analyzingStructuredAnalysis,
+  structuredAnalysisError,
   onClose,
   onRetry,
   onRetryFollowUps,
   onRetryWorkflow,
+  onAnalyzeStructuredJob,
   onAddFollowUp,
   onPrepareDelivery,
   onChangeStatus,
@@ -1578,6 +1636,14 @@ function JobDetailModal({
                     </div>
                   </div>
                 )}
+
+                <JobStructuredAnalysisPanel
+                  analysis={structuredAnalysis}
+                  loading={loadingStructuredAnalysis}
+                  analyzing={analyzingStructuredAnalysis}
+                  error={structuredAnalysisError}
+                  onAnalyze={onAnalyzeStructuredJob}
+                />
 
                 <div className="mt-6 rounded-2xl border border-slate-100 p-5 dark:border-slate-700">
                   <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">
@@ -2313,6 +2379,149 @@ interface AgentWorkflowTimelineProps {
   loadingWorkflow: boolean;
   workflowError: string | null;
   onRetryWorkflow: () => void;
+}
+
+interface JobStructuredAnalysisPanelProps {
+  analysis: JobStructuredAnalysis | null;
+  loading: boolean;
+  analyzing: boolean;
+  error: string | null;
+  onAnalyze: () => void;
+}
+
+function JobStructuredAnalysisPanel({
+  analysis,
+  loading,
+  analyzing,
+  error,
+  onAnalyze,
+}: JobStructuredAnalysisPanelProps) {
+  const hasAnalysis = analysis !== null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-cyan-100 bg-cyan-50/40 p-5 dark:border-cyan-800/60 dark:bg-cyan-900/10">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">岗位结构化 Agent</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            提取岗位方向、核心技能、任职要求、风险点和开场白重点，作为辅助投递工作流的分析节点。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onAnalyze}
+          disabled={loading || analyzing}
+          className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300 dark:disabled:bg-cyan-900/60"
+        >
+          {analyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {hasAnalysis ? '重新分析' : '结构化分析岗位'}
+        </button>
+      </div>
+
+      {loading && (
+        <div className="mt-4 flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-200">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          正在读取分析结果
+        </div>
+      )}
+
+      {!loading && error && (
+        <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-xs leading-5 text-red-600 dark:bg-red-900/20 dark:text-red-200">
+          {error}
+        </p>
+      )}
+
+      {!loading && !error && !analysis && (
+        <p className="mt-4 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          当前岗位还没有结构化分析。点击按钮后，系统会把 JD 转换成后续开场白生成和投递判断可复用的结构化上下文。
+        </p>
+      )}
+
+      {!loading && analysis && (
+        <div className="mt-4 space-y-4">
+          {(analysis.jobDirection || analysis.summary) && (
+            <div className="rounded-xl bg-white/80 p-4 dark:bg-slate-900/40">
+              {analysis.jobDirection && (
+                <span className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-200">
+                  {analysis.jobDirection}
+                </span>
+              )}
+              {analysis.summary && (
+                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{analysis.summary}</p>
+              )}
+            </div>
+          )}
+
+          <StructuredTagGroup title="核心技能" items={analysis.requiredSkills} tone="primary" />
+          <StructuredTagGroup title="加分方向" items={analysis.preferredSkills} tone="amber" />
+          <StructuredList title="岗位职责" items={analysis.responsibilities} />
+          <StructuredList title="任职要求" items={analysis.candidateRequirements} />
+          <StructuredList title="投递风险点" items={analysis.riskPoints} />
+
+          {analysis.openerFocus && (
+            <div className="rounded-xl border border-cyan-100 bg-white/80 p-4 dark:border-cyan-800/60 dark:bg-slate-900/40">
+              <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-200">开场白重点</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{analysis.openerFocus}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StructuredTagGroup({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  tone: 'primary' | 'amber';
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  const className =
+    tone === 'primary'
+      ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-300'
+      : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200';
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span key={`${title}-${item}`} className={`rounded-full px-3 py-1 text-xs font-medium ${className}`}>
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StructuredList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">{title}</p>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li
+            key={`${title}-${item}`}
+            className="rounded-xl bg-white/80 px-3 py-2 text-sm leading-6 text-slate-600 dark:bg-slate-900/40 dark:text-slate-300"
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function AgentWorkflowTimeline({

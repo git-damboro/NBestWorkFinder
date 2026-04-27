@@ -45,6 +45,7 @@ public class JobService {
     private final ObjectMapper objectMapper;
     private final JobFollowUpService jobFollowUpService;
     private final JobApplicationWorkflowService workflowService;
+    private final JobStructuredAnalysisService structuredAnalysisService;
 
     @Transactional
     public JobDetailDTO create(CreateJobRequest req, Long userId) {
@@ -159,6 +160,7 @@ public class JobService {
     public void delete(Long id, Long userId) {
         JobEntity job = findOrThrow(id, userId);
         workflowService.deleteByJob(id, userId);
+        structuredAnalysisService.deleteByJob(id, userId);
         jobRepository.delete(job);
     }
 
