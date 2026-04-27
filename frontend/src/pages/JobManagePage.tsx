@@ -469,8 +469,22 @@ export default function JobManagePage() {
     [jobs, selectedJobId],
   );
 
-  const uniqueTagCount = useMemo(
-    () => new Set(jobs.flatMap((job) => job.techTags)).size,
+  const deliveryPrepCounts = useMemo(
+    () =>
+      jobs.reduce(
+        (counts, job) => {
+          const state = getDeliveryPrepState(job);
+          counts[state.key] += 1;
+          return counts;
+        },
+        {
+          WAITING_SEND: 0,
+          PREPARED: 0,
+          FOLLOW_UP: 0,
+          IN_PROGRESS: 0,
+          NEED_INFO: 0,
+        } as Record<Exclude<DeliveryPrepFilter, 'ALL'>, number>,
+      ),
     [jobs],
   );
 
@@ -743,7 +757,7 @@ export default function JobManagePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           icon={Briefcase}
           label="职位总数"
@@ -752,18 +766,31 @@ export default function JobManagePage() {
           colorClass="bg-primary-500"
         />
         <SummaryCard
-          icon={Target}
-          label="可见结果"
-          value={filteredJobs.length.toString()}
-          hint="关键词搜索后的列表结果"
-          colorClass="bg-indigo-500"
+          icon={Copy}
+          label="待发送"
+          value={deliveryPrepCounts.WAITING_SEND.toString()}
+          hint="已导入岗位，下一步准备并发送开场白"
+          colorClass="bg-emerald-500"
+          active={deliveryPrepFilter === 'WAITING_SEND'}
+          onClick={() => setDeliveryPrepFilter('WAITING_SEND')}
         />
         <SummaryCard
-          icon={Sparkles}
-          label="标签覆盖"
-          value={uniqueTagCount.toString()}
-          hint="已提取技术标签的去重总数"
-          colorClass="bg-emerald-500"
+          icon={CheckCircle2}
+          label="已准备"
+          value={deliveryPrepCounts.PREPARED.toString()}
+          hint="已复制开场白或已有沟通记录"
+          colorClass="bg-sky-500"
+          active={deliveryPrepFilter === 'PREPARED'}
+          onClick={() => setDeliveryPrepFilter('PREPARED')}
+        />
+        <SummaryCard
+          icon={CalendarDays}
+          label="待跟进"
+          value={deliveryPrepCounts.FOLLOW_UP.toString()}
+          hint="已设置下一次跟进时间"
+          colorClass="bg-amber-500"
+          active={deliveryPrepFilter === 'FOLLOW_UP'}
+          onClick={() => setDeliveryPrepFilter('FOLLOW_UP')}
         />
       </div>
 
@@ -2215,25 +2242,49 @@ interface SummaryCardProps {
   value: string;
   hint: string;
   colorClass: string;
+  active?: boolean;
+  onClick?: () => void;
 }
 
-function SummaryCard({ icon: Icon, label, value, hint, colorClass }: SummaryCardProps) {
+function SummaryCard({ icon: Icon, label, value, hint, colorClass, active = false, onClick }: SummaryCardProps) {
+  const content = (
+    <div className="flex items-start gap-4">
+      <div className={`rounded-xl p-3 text-white ${colorClass}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{hint}</p>
+      </div>
+    </div>
+  );
+
+  if (onClick) {
+    return (
+      <motion.button
+        type="button"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        onClick={onClick}
+        className={`rounded-2xl border bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-800 ${
+          active
+            ? 'border-primary-300 ring-2 ring-primary-100 dark:border-primary-500 dark:ring-primary-900/40'
+            : 'border-slate-100 dark:border-slate-700'
+        }`}
+      >
+        {content}
+      </motion.button>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800"
     >
-      <div className="flex items-start gap-4">
-        <div className={`rounded-xl p-3 text-white ${colorClass}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{hint}</p>
-        </div>
-      </div>
+      {content}
     </motion.div>
   );
 }
