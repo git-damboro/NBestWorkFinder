@@ -41,10 +41,20 @@ import { userExperienceTypeLabelMap } from '../types/user-experience';
 import { formatDateOnly, formatDateTime } from '../utils/date';
 
 type StatusFilter = JobApplicationStatus | 'ALL';
+type DeliveryPrepFilter = 'ALL' | 'WAITING_SEND' | 'PREPARED' | 'FOLLOW_UP' | 'IN_PROGRESS' | 'NEED_INFO';
 
 const statusFilterOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'ALL', label: '全部状态' },
   ...jobStatusOptions,
+];
+
+const deliveryPrepFilterOptions: Array<{ value: DeliveryPrepFilter; label: string }> = [
+  { value: 'ALL', label: '全部准备状态' },
+  { value: 'WAITING_SEND', label: '待发送' },
+  { value: 'PREPARED', label: '已准备' },
+  { value: 'FOLLOW_UP', label: '待跟进' },
+  { value: 'IN_PROGRESS', label: '已进入流程' },
+  { value: 'NEED_INFO', label: '待完善' },
 ];
 
 function formatSalaryRange(salaryMin: number | null, salaryMax: number | null, salaryText?: string | null) {
@@ -83,6 +93,7 @@ function getStatusBadgeClass(status: JobApplicationStatus) {
 function getDeliveryPrepState(job: JobListItem) {
   if (job.applicationStatus !== 'SAVED') {
     return {
+      key: 'IN_PROGRESS' as const,
       label: jobStatusLabelMap[job.applicationStatus],
       hint: job.appliedAt ? `投递于 ${formatDateOnly(job.appliedAt)}` : '已进入投递流程',
       className: getStatusBadgeClass(job.applicationStatus),
@@ -91,6 +102,7 @@ function getDeliveryPrepState(job: JobListItem) {
 
   if (job.nextFollowUpAt) {
     return {
+      key: 'FOLLOW_UP' as const,
       label: '待跟进',
       hint: `跟进时间 ${formatDateOnly(job.nextFollowUpAt)}`,
       className: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
@@ -99,6 +111,7 @@ function getDeliveryPrepState(job: JobListItem) {
 
   if (job.lastFollowUpAt) {
     return {
+      key: 'PREPARED' as const,
       label: '已准备',
       hint: `最近记录 ${formatDateOnly(job.lastFollowUpAt)}`,
       className: 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
@@ -107,6 +120,7 @@ function getDeliveryPrepState(job: JobListItem) {
 
   if (job.sourceUrl) {
     return {
+      key: 'WAITING_SEND' as const,
       label: '待发送',
       hint: '已导入岗位，建议准备开场白',
       className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
@@ -114,6 +128,7 @@ function getDeliveryPrepState(job: JobListItem) {
   }
 
   return {
+    key: 'NEED_INFO' as const,
     label: '待完善',
     hint: '补全岗位信息后再投递',
     className: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
@@ -189,6 +204,14 @@ function matchKeyword(job: JobListItem, keyword: string) {
     .includes(normalizedKeyword);
 }
 
+function matchDeliveryPrepFilter(job: JobListItem, filter: DeliveryPrepFilter) {
+  if (filter === 'ALL') {
+    return true;
+  }
+
+  return getDeliveryPrepState(job).key === filter;
+}
+
 export default function JobManagePage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -203,6 +226,7 @@ export default function JobManagePage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [deliveryPrepFilter, setDeliveryPrepFilter] = useState<DeliveryPrepFilter>('ALL');
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<JobFormMode>('create');
   const [submitting, setSubmitting] = useState(false);
@@ -426,8 +450,8 @@ export default function JobManagePage() {
   }, [interviewOpen]);
 
   const filteredJobs = useMemo(
-    () => jobs.filter((job) => matchKeyword(job, searchKeyword)),
-    [jobs, searchKeyword],
+    () => jobs.filter((job) => matchKeyword(job, searchKeyword) && matchDeliveryPrepFilter(job, deliveryPrepFilter)),
+    [jobs, searchKeyword, deliveryPrepFilter],
   );
 
   useEffect(() => {
@@ -752,7 +776,7 @@ export default function JobManagePage() {
 
       <div className="grid gap-6">
         <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <div className="mb-4 grid gap-3 lg:grid-cols-[1fr,220px]">
+          <div className="mb-4 grid gap-3 lg:grid-cols-[1fr,200px,200px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -770,6 +794,18 @@ export default function JobManagePage() {
               className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-primary-900/30"
             >
               {statusFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={deliveryPrepFilter}
+              onChange={(event) => setDeliveryPrepFilter(event.target.value as DeliveryPrepFilter)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition-colors focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-primary-900/30"
+            >
+              {deliveryPrepFilterOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
