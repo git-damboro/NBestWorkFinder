@@ -44,6 +44,7 @@ public class JobService {
     private final PlatformTransactionManager transactionManager;
     private final ObjectMapper objectMapper;
     private final JobFollowUpService jobFollowUpService;
+    private final JobApplicationWorkflowService workflowService;
 
     @Transactional
     public JobDetailDTO create(CreateJobRequest req, Long userId) {
@@ -60,7 +61,9 @@ public class JobService {
         List<String> tags = extractTagsSafely(req.getTitle(), req.getDescription());
         job.setTechTags(joinTags(tags));
 
-        return toDetailDTO(jobRepository.save(job));
+        JobEntity saved = jobRepository.save(job);
+        workflowService.recordJobImported(saved, true);
+        return toDetailDTO(saved);
     }
 
     @Transactional
@@ -104,7 +107,9 @@ public class JobService {
             : sanitizeTags(req.techTags());
         job.setTechTags(joinTags(tags));
 
-        return toDetailDTO(jobRepository.save(job));
+        JobEntity saved = jobRepository.save(job);
+        workflowService.recordJobImported(saved, creating);
+        return toDetailDTO(saved);
     }
 
     public List<JobListItemDTO> list(Long userId, JobApplicationStatus status) {
@@ -142,6 +147,9 @@ public class JobService {
 
         if (req.getApplicationStatus() != null && req.getApplicationStatus() != previousStatus) {
             jobFollowUpService.recordStatusChange(job, previousStatus, req.getApplicationStatus());
+            if (req.getApplicationStatus() == JobApplicationStatus.APPLIED) {
+                workflowService.recordApplicationSent(job);
+            }
         }
 
         return toDetailDTO(jobRepository.save(job));
@@ -150,6 +158,7 @@ public class JobService {
     @Transactional
     public void delete(Long id, Long userId) {
         JobEntity job = findOrThrow(id, userId);
+        workflowService.deleteByJob(id, userId);
         jobRepository.delete(job);
     }
 

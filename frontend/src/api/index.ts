@@ -9,5 +9,6 @@ export { historyApi } from './history';
 export { jobApi } from './jobs';
 export { jobDraftApi } from './jobDrafts';
 export { jobFollowUpApi } from './jobFollowUps';
+export { jobWorkflowApi } from './jobWorkflows';
 export { aiGenerationTaskApi } from './aiGenerationTasks';
 export { userExperienceApi } from './userExperiences';

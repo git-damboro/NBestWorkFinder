@@ -4,6 +4,7 @@ import com.nbwf.common.result.Result;
 import com.nbwf.modules.aigeneration.model.AiGenerationTaskDTO;
 import com.nbwf.modules.job.model.*;
 import com.nbwf.modules.job.service.JobFollowUpService;
+import com.nbwf.modules.job.service.JobApplicationWorkflowService;
 import com.nbwf.modules.job.service.JobService;
 import com.nbwf.modules.jobdraft.model.JobDraftBatchCreatedDTO;
 import com.nbwf.modules.jobdraft.service.JobDraftService;
@@ -25,6 +26,7 @@ public class JobController {
     private final JobService jobService;
     private final JobDraftService jobDraftService;
     private final JobFollowUpService jobFollowUpService;
+    private final JobApplicationWorkflowService workflowService;
 
     @Operation(summary = "录入职位（粘贴 JD）")
     @PostMapping
@@ -99,6 +101,21 @@ public class JobController {
                                                        @Valid @RequestBody CreateJobFollowUpRequest req,
                                                        @AuthenticationPrincipal Long userId) {
         return Result.success(jobFollowUpService.createManual(id, req, userId));
+    }
+
+    @Operation(summary = "查询职位辅助投递 Agent 工作流")
+    @GetMapping("/{id}/workflow")
+    public Result<JobApplicationWorkflowDTO> getWorkflow(@PathVariable Long id,
+                                                        @AuthenticationPrincipal Long userId) {
+        return Result.success(workflowService.getWorkflow(id, userId));
+    }
+
+    @Operation(summary = "记录职位辅助投递 Agent 工作流事件")
+    @PostMapping("/{id}/workflow/events")
+    public Result<JobApplicationWorkflowEventDTO> createWorkflowEvent(@PathVariable Long id,
+                                                                     @Valid @RequestBody CreateWorkflowEventRequest req,
+                                                                     @AuthenticationPrincipal Long userId) {
+        return Result.success(workflowService.createManualEvent(id, userId, req));
     }
 
     @Operation(summary = "根据简历生成职位草稿")

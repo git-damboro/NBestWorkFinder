@@ -23,7 +23,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { jobApi, jobFollowUpApi, userExperienceApi } from '../api';
+import { jobApi, jobFollowUpApi, jobWorkflowApi, userExperienceApi } from '../api';
 import { historyApi, type ResumeDetail, type ResumeListItem } from '../api/history';
 import { getErrorMessage } from '../api/request';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -33,6 +33,8 @@ import JobFollowUpDialog from '../components/JobFollowUpDialog';
 import JobMatchDialog from '../components/JobMatchDialog';
 import type { CreateJobFollowUpForm, JobFollowUpRecord } from '../types/job-follow-up';
 import { jobFollowUpTypeLabelMap } from '../types/job-follow-up';
+import type { JobApplicationWorkflow } from '../types/job-workflow';
+import { workflowNodeLabelMap, workflowStatusLabelMap } from '../types/job-workflow';
 import type { InterviewJobTarget } from '../types/interview';
 import type { CreateJobForm, JobApplicationStatus, JobDetail, JobListItem, UpdateJobForm } from '../types/job';
 import { jobStatusLabelMap, jobStatusOptions } from '../types/job';
@@ -241,6 +243,9 @@ export default function JobManagePage() {
   const [followUps, setFollowUps] = useState<JobFollowUpRecord[]>([]);
   const [loadingFollowUps, setLoadingFollowUps] = useState(false);
   const [followUpError, setFollowUpError] = useState<string | null>(null);
+  const [workflow, setWorkflow] = useState<JobApplicationWorkflow | null>(null);
+  const [loadingWorkflow, setLoadingWorkflow] = useState(false);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
   const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [appliedDialogOpen, setAppliedDialogOpen] = useState(false);
@@ -301,6 +306,21 @@ export default function JobManagePage() {
     }
   }, []);
 
+  const loadWorkflow = useCallback(async (jobId: number) => {
+    setLoadingWorkflow(true);
+    setWorkflowError(null);
+
+    try {
+      const data = await jobWorkflowApi.get(jobId);
+      setWorkflow(data);
+    } catch (error) {
+      setWorkflow(null);
+      setWorkflowError(getErrorMessage(error));
+    } finally {
+      setLoadingWorkflow(false);
+    }
+  }, []);
+
   const loadDeliveryExperiences = useCallback(async () => {
     setLoadingDeliveryExperiences(true);
     setDeliveryPrepError(null);
@@ -343,19 +363,21 @@ export default function JobManagePage() {
       }
       setSelectedJob(data);
       void loadFollowUps(jobId);
+      void loadWorkflow(jobId);
     } catch (error) {
       if (detailRequestIdRef.current !== requestId) {
         return;
       }
       setSelectedJob(null);
       setFollowUps([]);
+      setWorkflow(null);
       setDetailError(getErrorMessage(error));
     } finally {
       if (detailRequestIdRef.current === requestId) {
         setLoadingDetail(false);
       }
     }
-  }, [loadFollowUps]);
+  }, [loadFollowUps, loadWorkflow]);
 
   const loadJobs = useCallback(
     async (preferredId?: number | null) => {
@@ -370,6 +392,7 @@ export default function JobManagePage() {
           setSelectedJobId(null);
           setSelectedJob(null);
           setFollowUps([]);
+          setWorkflow(null);
           setDetailError(null);
           return;
         }
@@ -385,6 +408,7 @@ export default function JobManagePage() {
         setSelectedJobId(null);
         setSelectedJob(null);
         setFollowUps([]);
+        setWorkflow(null);
       } finally {
         setLoadingList(false);
       }
@@ -400,6 +424,7 @@ export default function JobManagePage() {
     if (selectedJobId === null) {
       setSelectedJob(null);
       setFollowUps([]);
+      setWorkflow(null);
       setDetailError(null);
       return;
     }
@@ -642,6 +667,7 @@ export default function JobManagePage() {
   const refreshSelectedJobProgress = async (jobId: number) => {
     await loadJobDetail(jobId);
     await loadFollowUps(jobId);
+    await loadWorkflow(jobId);
     await loadJobs(jobId);
   };
 
@@ -660,6 +686,17 @@ export default function JobManagePage() {
         draft,
       ].join('\n'),
       contactMethod: 'BOSS',
+    });
+    await jobWorkflowApi.createEvent(selectedJob.id, {
+      nodeKey: 'OPENER_COPIED',
+      title: '开场白已复制',
+      content: '用户已复制开场白，工作流进入人工发送确认阶段。',
+      outputSnapshot: JSON.stringify({
+        resumeId: resume?.id ?? null,
+        resumeFilename: resume?.filename ?? null,
+        openerLength: draft.length,
+      }),
+      requiresHumanAction: true,
     });
     await refreshSelectedJobProgress(selectedJob.id);
   };
@@ -992,6 +1029,9 @@ export default function JobManagePage() {
         followUps={followUps}
         loadingFollowUps={loadingFollowUps}
         followUpError={followUpError}
+        workflow={workflow}
+        loadingWorkflow={loadingWorkflow}
+        workflowError={workflowError}
         onClose={() => setDetailModalOpen(false)}
         onRetry={() => {
           if (selectedJobId !== null) {
@@ -1001,6 +1041,11 @@ export default function JobManagePage() {
         onRetryFollowUps={() => {
           if (selectedJobId !== null) {
             void loadFollowUps(selectedJobId);
+          }
+        }}
+        onRetryWorkflow={() => {
+          if (selectedJobId !== null) {
+            void loadWorkflow(selectedJobId);
           }
         }}
         onAddFollowUp={() => setFollowUpDialogOpen(true)}
@@ -1225,9 +1270,13 @@ interface JobDetailModalProps {
   followUps: JobFollowUpRecord[];
   loadingFollowUps: boolean;
   followUpError: string | null;
+  workflow: JobApplicationWorkflow | null;
+  loadingWorkflow: boolean;
+  workflowError: string | null;
   onClose: () => void;
   onRetry: () => void;
   onRetryFollowUps: () => void;
+  onRetryWorkflow: () => void;
   onAddFollowUp: () => void;
   onPrepareDelivery: () => void;
   onChangeStatus: (status: JobApplicationStatus) => void;
@@ -1245,9 +1294,13 @@ function JobDetailModal({
   followUps,
   loadingFollowUps,
   followUpError,
+  workflow,
+  loadingWorkflow,
+  workflowError,
   onClose,
   onRetry,
   onRetryFollowUps,
+  onRetryWorkflow,
   onAddFollowUp,
   onPrepareDelivery,
   onChangeStatus,
@@ -1359,6 +1412,13 @@ function JobDetailModal({
                   loadingFollowUps={loadingFollowUps}
                   followUpError={followUpError}
                   onRetryFollowUps={onRetryFollowUps}
+                />
+
+                <AgentWorkflowTimeline
+                  workflow={workflow}
+                  loadingWorkflow={loadingWorkflow}
+                  workflowError={workflowError}
+                  onRetryWorkflow={onRetryWorkflow}
                 />
 
                 <div className="mt-6">
@@ -2246,6 +2306,90 @@ interface SummaryCardProps {
   colorClass: string;
   active?: boolean;
   onClick?: () => void;
+}
+
+interface AgentWorkflowTimelineProps {
+  workflow: JobApplicationWorkflow | null;
+  loadingWorkflow: boolean;
+  workflowError: string | null;
+  onRetryWorkflow: () => void;
+}
+
+function AgentWorkflowTimeline({
+  workflow,
+  loadingWorkflow,
+  workflowError,
+  onRetryWorkflow,
+}: AgentWorkflowTimelineProps) {
+  const events = workflow?.events ?? [];
+
+  return (
+    <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-800/60 dark:bg-indigo-900/10">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Agent Workflow</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {workflow
+              ? `${workflowStatusLabelMap[workflow.status]} · ${workflowNodeLabelMap[workflow.currentNode]}`
+              : '记录岗位导入、开场白复制、投递确认等人控式 Agent 节点'}
+          </p>
+        </div>
+        {loadingWorkflow && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
+      </div>
+
+      {workflow?.nextAction && (
+        <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs text-indigo-700 dark:bg-slate-900/40 dark:text-indigo-200">
+          下一步：{workflow.nextAction}
+        </div>
+      )}
+
+      {!loadingWorkflow && workflowError && (
+        <button
+          type="button"
+          onClick={onRetryWorkflow}
+          className="mt-3 text-left text-xs text-red-600 hover:underline dark:text-red-300"
+        >
+          {workflowError}，点击重试
+        </button>
+      )}
+
+      {!loadingWorkflow && !workflowError && events.length === 0 && (
+        <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+          还没有工作流事件。通过插件导入岗位、复制开场白或标记已投递后会生成事件。
+        </p>
+      )}
+
+      {!loadingWorkflow && !workflowError && events.length > 0 && (
+        <div className="mt-3 space-y-3">
+          {events.slice(0, 5).map((event) => (
+            <div key={event.id} className="rounded-xl bg-white/80 p-3 shadow-sm dark:bg-slate-900/40">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{event.title}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {workflowNodeLabelMap[event.nodeKey]} · {formatDateTime(event.createdAt)}
+                  </p>
+                </div>
+                {event.requiresHumanAction && (
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                    人工确认
+                  </span>
+                )}
+              </div>
+              {event.content && (
+                <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  {event.content}
+                </p>
+              )}
+            </div>
+          ))}
+          {events.length > 5 && (
+            <p className="text-xs text-slate-400 dark:text-slate-500">还有 {events.length - 5} 条工作流事件</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SummaryCard({ icon: Icon, label, value, hint, colorClass, active = false, onClick }: SummaryCardProps) {

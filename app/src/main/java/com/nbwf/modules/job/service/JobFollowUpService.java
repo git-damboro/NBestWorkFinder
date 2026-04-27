@@ -22,6 +22,7 @@ public class JobFollowUpService {
 
     private final JobRepository jobRepository;
     private final JobFollowUpRecordRepository recordRepository;
+    private final JobApplicationWorkflowService workflowService;
 
     @Transactional(readOnly = true)
     public List<JobFollowUpRecordDTO> list(Long jobId, Long userId) {
@@ -53,6 +54,7 @@ public class JobFollowUpService {
 
         JobFollowUpRecordEntity saved = recordRepository.save(record);
         updateJobSnapshots(job, saved);
+        workflowService.recordFollowUpScheduled(job, saved.getNextFollowUpAt());
         jobRepository.save(job);
         return toDTO(saved);
     }
