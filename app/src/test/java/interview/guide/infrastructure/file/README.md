@@ -17,33 +17,33 @@
 
 ```bash
 # 在项目根目录运行
-cd /Users/guide/Desktop/interview-guide
+cd /path/to/NBestWorkFinder
 
 # 运行所有测试
-./gradlew test
+./gradlew.bat :app:test
 
 # 只运行 DocumentParseService 相关测试
-./gradlew test --tests "*DocumentParseService*"
+./gradlew.bat :app:test --tests "*DocumentParseService*"
 ```
 
 ### 运行特定测试类
 
 ```bash
 # 运行单元测试
-./gradlew test --tests "interview.guide.infrastructure.file.DocumentParseServiceTest"
+./gradlew.bat :app:test --tests "com.nbwf.infrastructure.file.DocumentParseServiceTest"
 
 # 运行集成测试
-./gradlew test --tests "interview.guide.infrastructure.file.DocumentParseIntegrationTest"
+./gradlew.bat :app:test --tests "com.nbwf.infrastructure.file.DocumentParseIntegrationTest"
 ```
 
 ### 运行特定测试方法
 
 ```bash
 # 运行单个测试方法
-./gradlew test --tests "DocumentParseServiceTest.testParseTxtFile"
+./gradlew.bat :app:test --tests "DocumentParseServiceTest.testParseTxtFile"
 
 # 使用通配符
-./gradlew test --tests "DocumentParseServiceTest.testParse*"
+./gradlew.bat :app:test --tests "DocumentParseServiceTest.testParse*"
 ```
 
 ## 📊 测试覆盖
@@ -131,7 +131,7 @@ app/build/reports/tests/test/index.html
 
 ```bash
 # 运行测试并生成覆盖率报告
-./gradlew test jacocoTestReport
+./gradlew.bat :app:test :app:jacocoTestReport
 
 # 查看报告
 open app/build/reports/jacoco/test/html/index.html

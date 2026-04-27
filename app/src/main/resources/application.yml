@@ -1,5 +1,5 @@
-# AI Interview Platform Configuration
-# 智能AI面试官平台配置
+# NBestWorkFinder Configuration
+# AI 求职工作台配置
 
 server:
   port: 8080
@@ -16,7 +16,7 @@ springdoc:
 
 spring:
   application:
-    name: ai-interview-platform
+    name: nbestworkfinder
 
   # 启用虚拟线程 (Java 21+)
   # 显著提升 I/O 密集型场景的并发能力，特别适合 AI 调用和 SSE 长连接

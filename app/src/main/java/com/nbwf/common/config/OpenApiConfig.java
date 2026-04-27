@@ -12,8 +12,8 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("智能 AI 面试官平台 API")
-                        .description("简历分析、模拟面试、知识库管理 RESTful API 文档")
+                        .title("NBestWorkFinder API")
+                        .description("AI 求职工作台 RESTful API 文档，覆盖简历分析、职位工作台、辅助投递、模拟面试和知识库管理")
                         .version("1.0.0"));
     }
 }
