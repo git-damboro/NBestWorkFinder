@@ -762,8 +762,10 @@ export default function JobManagePage() {
           icon={Briefcase}
           label="职位总数"
           value={jobs.length.toString()}
-          hint="当前状态筛选下的职位数量"
+          hint="点击查看全部准备状态"
           colorClass="bg-primary-500"
+          active={deliveryPrepFilter === 'ALL'}
+          onClick={() => setDeliveryPrepFilter('ALL')}
         />
         <SummaryCard
           icon={Copy}
