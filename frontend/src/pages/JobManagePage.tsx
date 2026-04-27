@@ -80,6 +80,46 @@ function getStatusBadgeClass(status: JobApplicationStatus) {
   }
 }
 
+function getDeliveryPrepState(job: JobListItem) {
+  if (job.applicationStatus !== 'SAVED') {
+    return {
+      label: jobStatusLabelMap[job.applicationStatus],
+      hint: job.appliedAt ? `投递于 ${formatDateOnly(job.appliedAt)}` : '已进入投递流程',
+      className: getStatusBadgeClass(job.applicationStatus),
+    };
+  }
+
+  if (job.nextFollowUpAt) {
+    return {
+      label: '待跟进',
+      hint: `跟进时间 ${formatDateOnly(job.nextFollowUpAt)}`,
+      className: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    };
+  }
+
+  if (job.lastFollowUpAt) {
+    return {
+      label: '已准备',
+      hint: `最近记录 ${formatDateOnly(job.lastFollowUpAt)}`,
+      className: 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
+    };
+  }
+
+  if (job.sourceUrl) {
+    return {
+      label: '待发送',
+      hint: '已导入岗位，建议准备开场白',
+      className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    };
+  }
+
+  return {
+    label: '待完善',
+    hint: '补全岗位信息后再投递',
+    className: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  };
+}
+
 function buildFormInitialData(job?: JobDetail | null): JobFormData | null {
   if (!job) {
     return null;
@@ -792,6 +832,7 @@ export default function JobManagePage() {
             <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {filteredJobs.map((job, index) => {
                 const active = job.id === selectedJobId;
+                const deliveryPrepState = getDeliveryPrepState(job);
 
                 return (
                   <motion.button
@@ -837,6 +878,19 @@ export default function JobManagePage() {
                     <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">
                       {formatSalaryRange(job.salaryMin, job.salaryMax, job.salaryText)}
                     </p>
+
+                    <div className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs dark:bg-slate-900/30">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`inline-flex flex-shrink-0 rounded-full px-2.5 py-1 font-medium ${deliveryPrepState.className}`}
+                        >
+                          {deliveryPrepState.label}
+                        </span>
+                        <span className="truncate text-slate-500 dark:text-slate-400">
+                          {deliveryPrepState.hint}
+                        </span>
+                      </div>
+                    </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       {job.techTags.length > 0 ? (
